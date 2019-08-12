@@ -10,14 +10,26 @@
 #include<linux/if_ether.h>
 #include<linux/if_packet.h>
 #include<pthread.h>
+#include<cerrno>
 
 #define IPGW_IP_ADDR "202.118.1.87"
-#define SERVER_A_IP_ADDR "192.168.1.102"
+#define SERVER_A_IP_ADDR "58.154.192.58"
 #define DEFAULT_UDP_PORT 1026
-#define DEFAULT_DEVICE_NAME "wlp1s0"
+#define DEFAULT_DEVICE_NAME "enp5s0"
 
 u_char SERVER_A_MAC[6]={0xa0,0xc5,0x89,0x00,0x00,0x01};
 u_char SERVER_B_MAC[6]={0xa0,0xc5,0x89,0x00,0x00,0x02};
+
+void print_data(u_char *data,int data_len){
+    printf("\n");
+    for(int i=0;i<data_len;i++){
+        printf("%02x ",data[i]);
+        if(i!=0&&i%16==0)
+            printf("\n");
+    }
+    printf("\n");
+}
+
 
 /*************************************
  * 
@@ -53,6 +65,7 @@ int send_tcp_dgram(int sock_raw_fd,u_char *ip_tcp_data,int data_len,sockaddr_ll 
     int ret = 0;
     if(ip_tcp_data == NULL){
         ret = -1;
+	printf("null data");
         return ret;
     }
     socklen_t socklen=sizeof(sockaddr_ll);
@@ -60,10 +73,13 @@ int send_tcp_dgram(int sock_raw_fd,u_char *ip_tcp_data,int data_len,sockaddr_ll 
     memcpy(buf,SERVER_B_MAC,6);
     memcpy(buf+6,SERVER_A_MAC,6);
     u_int16_t *data16 = (u_int16_t*)buf;
-    data16[6]=ETH_P_IP;
+    data16[6]=htons(ETH_P_IP);
     memcpy(buf+14,ip_tcp_data,data_len);
+    printf("====");
+    print_data(buf,data_len+14);
     int len=sendto(sock_raw_fd,buf,(size_t)(data_len+14),0,(sockaddr*)&addr,socklen);
     if(len<0){
+	printf("error sendto,errno:%d\n",errno);
         ret = -1;
         return ret;
     }
@@ -126,7 +142,7 @@ void* main_thread(void*){
     }
 
     /*初始化发送raw数据 */
-    int sock_raw_fd=socket(AF_INET,SOCK_RAW,htons(ETH_P_IP));
+    int sock_raw_fd=socket(PF_PACKET,SOCK_RAW,htons(ETH_P_IP));
     if(sock_raw_fd < 0){
         perror("raw socket open error!");
     }
@@ -143,6 +159,7 @@ void* main_thread(void*){
             perror("recv sock dgram error");
             continue;
         }
+	print_data(buf,ip_tcp_len);
         int send = send_tcp_dgram(sock_raw_fd,buf,ip_tcp_len,local_raw);
         if(send < 0)
             perror("send sock raw error");
