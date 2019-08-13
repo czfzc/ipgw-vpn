@@ -13,12 +13,12 @@
 #include<cerrno>
 
 #define IPGW_IP_ADDR "202.118.1.87"
-#define SERVER_A_IP_ADDR "58.154.192.58"
+#define SERVER_A_IP_ADDR "172.17.0.2"
 #define DEFAULT_UDP_PORT 1026
-#define DEFAULT_DEVICE_NAME "enp5s0"
+#define DEFAULT_DEVICE_NAME "eth0"
 
-u_char SERVER_A_MAC[6]={0xa0,0xc5,0x89,0x00,0x00,0x01};
-u_char SERVER_B_MAC[6]={0xa0,0xc5,0x89,0x00,0x00,0x02};
+u_char SERVER_A_MAC[6]={0x02,0x42,0xac,0x11,0x00,0x02};
+u_char SERVER_B_MAC[6]={0x02,0x42,0xac,0x11,0x00,0x03};
 
 void print_data(u_char *data,int data_len){
     printf("\n");
