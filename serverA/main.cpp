@@ -12,13 +12,30 @@
 #include<pthread.h>
 #include<cerrno>
 
+#include<queue>
+
 #define IPGW_IP_ADDR "202.118.1.87"
 #define SERVER_A_IP_ADDR "172.17.0.2"
 #define DEFAULT_UDP_PORT 1026
 #define DEFAULT_DEVICE_NAME "eth0"
+#define MAX_BUFFER_QUEUE_SIZE 5000
+#define MAX_DATA_SIZE 1536
+
+using namespace std;
 
 u_char SERVER_A_MAC[6]={0x02,0x42,0xac,0x11,0x00,0x02};
 u_char SERVER_B_MAC[6]={0x02,0x42,0xac,0x11,0x00,0x03};
+
+struct packet{
+    u_char data[MAX_DATA_SIZE];
+    int data_len;
+};
+
+/*************************************
+ * 
+ * 打印数据报
+ * 
+ *************************************/
 
 void print_data(u_char *data,int data_len){
     printf("\n");
@@ -45,7 +62,7 @@ int recv_udpop_from_client_and_unpack_to_tcp(int sock_dgram_fd,u_char *ip_tcp_da
     }
     struct sockaddr_in client;
     socklen_t server_len=sizeof(struct sockaddr_in);
-    int len = recvfrom(sock_dgram_fd,ip_tcp_data,1024,0,(struct sockaddr*)&client,&server_len);
+    int len = recvfrom(sock_dgram_fd,ip_tcp_data,MAX_DATA_SIZE,0,(struct sockaddr*)&client,&server_len);
     if(len<0){
         printf("recvfrom error\n");
         ret = -1;
@@ -69,7 +86,7 @@ int send_tcp_dgram(int sock_raw_fd,u_char *ip_tcp_data,int data_len,sockaddr_ll 
         return ret;
     }
     socklen_t socklen=sizeof(sockaddr_ll);
-    u_char buf[1024]={0};
+    u_char buf[MAX_DATA_SIZE]={0};
     memcpy(buf,SERVER_B_MAC,6);
     memcpy(buf+6,SERVER_A_MAC,6);
     u_int16_t *data16 = (u_int16_t*)buf;
@@ -149,20 +166,54 @@ void* main_thread(void*){
     struct sockaddr_ll local_raw;
     get_default_sockaddr_ll_send(sock_raw_fd,&local_raw,DEFAULT_DEVICE_NAME);
 
-    u_int8_t buf[1024]={0};
+    u_int8_t buf[MAX_DATA_SIZE]={0};
+
+    fd_set read_set;
+    fd_set write_set;
+    timeval time = {1,0};
+    int fd_max = sock_dgram_fd > sock_raw_fd ? sock_dgram_fd : sock_raw_fd;
+    queue<packet> buffer; 
 
     while(1){
-        
-        int ip_tcp_len = -1;
-        int recv = recv_udpop_from_client_and_unpack_to_tcp(sock_dgram_fd,buf,&ip_tcp_len);
-        if(recv < 0){
-            perror("recv sock dgram error");
+        FD_ZERO(&read_set);
+        FD_ZERO(&write_set);
+        FD_SET(sock_dgram_fd,&read_set);
+        FD_SET(sock_raw_fd,&write_set);
+        int n = select(fd_max,&read_set,&write_set,NULL,&time);
+        if(n==0)
             continue;
-        }
-	print_data(buf,ip_tcp_len);
-        int send = send_tcp_dgram(sock_raw_fd,buf,ip_tcp_len,local_raw);
-        if(send < 0)
-            perror("send sock raw error");
+        else if (n>0){
+           if(FD_ISSET(sock_dgram_fd,&read_set)){
+               if(buffer.size()<MAX_BUFFER_QUEUE_SIZE){
+                    int ip_tcp_len = -1;
+                    int recv = recv_udpop_from_client_and_unpack_to_tcp(sock_dgram_fd,buf,&ip_tcp_len);
+                    if(recv < 0){
+                        perror("recv sock dgram error");
+                        continue;
+                    }
+                    print_data(buf,ip_tcp_len);
+                    packet* data=new packet;
+                    memcpy(data->data,buf,MAX_DATA_SIZE);
+                    data->data_len = ip_tcp_len;
+                    buffer.push(*data);
+               }else{
+                   /*应当阻塞 停止阻塞条件为buffer.size() < MAX_BUFFER_QUEUE_SIZE */
+               }
+           }else if(FD_ISSET(sock_raw_fd,&write_set)){
+               if(buffer.size()>0){
+                    packet data = buffer.front();
+                    int send = send_tcp_dgram(sock_raw_fd,data.data,data.data_len,local_raw);
+                    if(send < 0)
+                        perror("send sock raw error");
+                    buffer.pop();
+                    delete &data;
+               }else{
+                   /*应当阻塞 停止阻塞条件为buffer.size() > 0 */
+               }
+           }
+        }else if(n<0){
+            printf("select() error!");
+        }          
         
     }
 
