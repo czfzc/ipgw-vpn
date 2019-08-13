@@ -41,7 +41,7 @@ void print_data(u_char *data,int data_len){
     printf("\n");
     for(int i=0;i<data_len;i++){
         printf("%02x ",data[i]);
-        if(i!=0&&i%16==0)
+        if(i!=0&&(i+1)%16==0)
             printf("\n");
     }
     printf("\n");
