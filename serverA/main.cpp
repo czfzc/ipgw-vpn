@@ -207,7 +207,8 @@ void* main_thread(void*){
                     if(send < 0)
                         perror("send sock raw error");
                     buffer.pop();
-                    delete &data;
+                   // delete ptr;
+
                }else{
                    /*应当阻塞 停止阻塞条件为buffer.size() > 0 */
                }
