@@ -120,8 +120,8 @@ void *send_thread(void *)
         pthread_mutex_lock(&mutex_queue);
         if (PackBuff.empty())
         {
-            usleep(20);
             pthread_mutex_unlock(&mutex_queue);
+            usleep(20);
             continue;
         }
         temp=PackBuff.front();
