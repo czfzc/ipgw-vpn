@@ -168,22 +168,22 @@ void* main_thread(void*){
 
     u_int8_t buf[MAX_DATA_SIZE]={0};
 
-    fd_set read_set;
-    fd_set write_set;
+    fd_set fds;
     timeval time = {1,0};
     int fd_max = sock_dgram_fd > sock_raw_fd ? sock_dgram_fd : sock_raw_fd;
     queue<packet> buffer; 
 
     while(1){
-        FD_ZERO(&read_set);
-        FD_ZERO(&write_set);
-        FD_SET(sock_dgram_fd,&read_set);
-        FD_SET(sock_raw_fd,&write_set);
-        int n = select(fd_max,&read_set,&write_set,NULL,&time);
-        if(n==0)
+        FD_ZERO(&fds);
+        FD_SET(sock_dgram_fd,&fds);
+        FD_SET(sock_raw_fd,&fds);
+	//printf("before select");
+        int n = select(fd_max+1,&fds,&fds,NULL,&time);
+       	//printf("finish select");
+       	if(n==0)
             continue;
         else if (n>0){
-           if(FD_ISSET(sock_dgram_fd,&read_set)){
+           if(FD_ISSET(sock_dgram_fd,&fds)){
                if(buffer.size()<MAX_BUFFER_QUEUE_SIZE){
                     int ip_tcp_len = -1;
                     int recv = recv_udpop_from_client_and_unpack_to_tcp(sock_dgram_fd,buf,&ip_tcp_len);
@@ -199,7 +199,8 @@ void* main_thread(void*){
                }else{
                    /*应当阻塞 停止阻塞条件为buffer.size() < MAX_BUFFER_QUEUE_SIZE */
                }
-           }else if(FD_ISSET(sock_raw_fd,&write_set)){
+           }
+	   if(FD_ISSET(sock_raw_fd,&fds)){
                if(buffer.size()>0){
                     packet data = buffer.front();
                     int send = send_tcp_dgram(sock_raw_fd,data.data,data.data_len,local_raw);
