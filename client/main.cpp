@@ -14,7 +14,7 @@
 #define DEFAULT_UDP_PORT 1026
 #define IPGW "202.118.1.87"
 #define IPGW_DEFAULT_PORT 80
-#define SERVER_A_IP_ADDR "192.168.1.102"
+#define SERVER_A_IP_ADDR "58.154.192.58"
 
 /*************************************
  * 
