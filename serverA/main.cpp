@@ -82,7 +82,7 @@ int send_tcp_dgram(int sock_raw_fd,u_char *ip_tcp_data,int data_len,sockaddr_ll 
     int ret = 0;
     if(ip_tcp_data == NULL){
         ret = -1;
-	printf("null data");
+	    printf("null data");
         return ret;
     }
     socklen_t socklen=sizeof(sockaddr_ll);
@@ -177,9 +177,7 @@ void* main_thread(void*){
         FD_ZERO(&fds);
         FD_SET(sock_dgram_fd,&fds);
         FD_SET(sock_raw_fd,&fds);
-	//printf("before select");
         int n = select(fd_max+1,&fds,&fds,NULL,&time);
-       	//printf("finish select");
        	if(n==0)
             continue;
         else if (n>0){

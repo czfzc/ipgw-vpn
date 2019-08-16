@@ -44,8 +44,6 @@ typedef struct{
 static queue<packet*>PackBuff;
 pthread_mutex_t mutex_queue;
 
-pthread_mutex_t mutex_ctlsend;
-
 void get_default_sockaddr_ll_send(int fd,sockaddr_ll *addr_ll,char *nic_name);
 
 inline void print_data(u_char *data,int data_len){
