@@ -325,7 +325,7 @@ void* sendpkt_thread(void*){
         pthread_mutex_lock(&pthread_mutex);
         if(data_queue.size()==0){
             pthread_mutex_unlock(&pthread_mutex);
-            usleep(20);
+            usleep(1000000);
             continue;
         }
         packet *data = data_queue.front();
@@ -353,6 +353,7 @@ void* sendpkt_thread(void*){
                     seq_numbers.push_back(seq_number);
                     /*此处向serverB发送ipgw syn ack */
                     packet tcp_data;
+                    tcp_data.data = new u_char[MAX_DATA_SIZE];
                     int test_ipgw_seq=0x12345678;
                     generate_syn_ack_ip_packet(&tcp_data,dst_ip,src_ip,dst_port,src_port,test_ipgw_seq,seq_number+1);
                     send_ip_ll(sock_raw_fd,tcp_data.data,tcp_data.data_len,addr_ll,SERVER_A_MAC,SERVER_B_MAC);
@@ -391,11 +392,12 @@ void* recvpkt_thread(void*){
             usleep(20);
             continue;
         }
+        pthread_mutex_unlock(&pthread_mutex);
         socklen_t socklen = sizeof(sockaddr_ll);
         packet *data = new packet;
         data->data=new u_char[MAX_DATA_SIZE];
         int n = recvfrom(sock_raw_fd,data->data,MAX_DATA_SIZE,0,(sockaddr*)&addr_ll,&socklen);
-        print_data(data->data,data->data_len);
+        print_data(data->data,n);
         if(n < 0){
             printf("raw socket recvfrom() error");
         }
@@ -406,7 +408,7 @@ void* recvpkt_thread(void*){
         if(memcmp((data->data)+6,SERVER_B_MAC,6)==0){ /*判断数据包若来自serverB则处理 */
             pthread_mutex_lock(&pthread_mutex);
             data_queue.push(data);
-            pthread_mutex_lock(&pthread_mutex);
+            pthread_mutex_unlock(&pthread_mutex);
         }
         
     }
