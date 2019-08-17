@@ -193,6 +193,8 @@ void* recv_thread(void*){
                 packet *data = new packet;
                 data->data = new u_char[MAX_DATA_SIZE];
                 int n = recv(sock_udp_fd,data->data,MAX_DATA_SIZE,0);
+                printf("udp:\n");
+                print_data(data->data,n);
                 if(n < 0){
                     printf("udp recv() error");
                     delete data;
@@ -206,9 +208,12 @@ void* recv_thread(void*){
             if(FD_ISSET(sock_raw_fd,&read_set)){ /*sock raw有数据 */
                 packet *data = new packet;
                 data->data = new u_char[MAX_DATA_SIZE];
-                int n = recv(sock_raw_fd,data->data,MAX_DATA_SIZE,0);
+                socklen_t socklen=sizeof(sockaddr_ll);
+                int n = recvfrom(sock_raw_fd,data->data,MAX_DATA_SIZE,0,(sockaddr*)&addr_ll,&socklen);
+                printf("raw:\n");
+                print_data(data->data,n);
                 if(n < 0){
-                    printf("ip raw socket recv() error");
+                    printf("raw socket recvfrom() error");
                     delete data->data;
                     delete data;
                 }else{
