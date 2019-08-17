@@ -44,6 +44,22 @@ static sockaddr_ll addr_ll;
 
 /*************************************
  * 
+ * 打印数据报
+ * 
+ *************************************/
+
+void print_data(u_char *data,int data_len){
+    printf("\n");
+    for(int i=0;i<data_len;i++){
+        printf("%02x ",data[i]);
+        if(i!=0&&(i+1)%16==0)
+            printf("\n");
+    }
+    printf("\n");
+}
+
+/*************************************
+ * 
  * 将ip tcp数据报封装到udp并发送之
  * 
  *************************************/
@@ -63,42 +79,6 @@ int send_udp_dgram_from_tcp_data(int sock_dgram_fd,u_char *ip_tcp_data,int data_
     }
     return ret;
 }
-
-
-/*************************************
- * 
- * 根据网卡设备名获取网卡序列号
- * 
- *************************************/
-
-int get_nic_index(int fd,const char* nic_name)
-{
-    struct ifreq ifr;
-    if (nic_name== NULL)
-        return -1;
-    memset(&ifr, 0,sizeof(ifr));
-    strncpy(ifr.ifr_name, nic_name, IFNAMSIZ);
-    if (ioctl(fd,SIOCGIFINDEX,&ifr) == -1){
-        printf("SIOCGIFINDEX ioctl error");
-        return -1;
-    }
-    return ifr.ifr_ifindex;
-}
-
-/*************************************
- * 
- * 获取默认发送sockaddr_ll
- * 
- *************************************/
-
-void get_default_sockaddr_ll_send(int fd,sockaddr_ll *addr_ll,char *nic_name)
-{
-    memset(addr_ll,0,sizeof(addr_ll));
-    addr_ll->sll_ifindex=get_nic_index(fd,nic_name);
-    addr_ll->sll_family=PF_PACKET;
-    addr_ll->sll_halen=ETH_ALEN;
-}
-
 
 /*************************************
  * 
@@ -151,7 +131,7 @@ void* recv_thread(void*){
         FD_SET(sock_udp_fd,&read_set);
         FD_SET(sock_ip_tcp_fd,&read_set);
         int max_fd = sock_udp_fd > sock_ip_tcp_fd?sock_udp_fd:sock_ip_tcp_fd;
-        int n = select(max_fd,&read_set,NULL,NULL,&timeout);
+        int n = select(max_fd+1,&read_set,NULL,NULL,&timeout);
         if(n == 0)
             continue;
         else if(n > 0){
@@ -163,6 +143,7 @@ void* recv_thread(void*){
                     printf("udp recv() error");
                     delete data;
                 }else{
+                    data->data_len = n;
                     pthread_mutex_lock(&pthread_mutex);
                     data_queue.push(data);
                     pthread_mutex_unlock(&pthread_mutex);
@@ -177,6 +158,7 @@ void* recv_thread(void*){
                     delete data->data;
                     delete data;
                 }else{
+                    data->data_len = n;
                     pthread_mutex_lock(&pthread_mutex);
                     data_queue.push(data);
                     pthread_mutex_unlock(&pthread_mutex);
@@ -188,7 +170,11 @@ void* recv_thread(void*){
     }
 }
 
-/*初始化套接字和udp连接serverA */
+/*************************************
+ * 
+ * 初始化套接字和udp连接serverA
+ * 
+ *************************************/
 
 int init(){
     int ret = 0;
@@ -204,12 +190,12 @@ int init(){
     sockaddr_in client;
     client.sin_family = AF_INET;
     client.sin_addr.s_addr = inet_addr(CLIENT_SUBNET_IP_ADDR);
-    client.sin_port = DEFAULT_UDP_PORT;
+    client.sin_port = htons(DEFAULT_UDP_PORT);
     bind(sock_udp_fd,(sockaddr*)&client,sizeof(sockaddr));
     sockaddr_in serA;
     serA.sin_family = AF_INET;
     serA.sin_addr.s_addr = inet_addr(SERVER_A_IP_ADDR);
-    serA.sin_port = DEFAULT_UDP_PORT;
+    serA.sin_port = htons(DEFAULT_UDP_PORT);
     connect(sock_udp_fd,(sockaddr*)&serA,sizeof(sockaddr));
     /*发送握手包通知client已上线 */
     send(sock_udp_fd,"hello",5,0);
@@ -240,13 +226,17 @@ int init(){
 }
 
 void* main_thread(void*){
+    pthread_t recv,send;
+    pthread_mutex_init(&pthread_mutex,NULL);
     int status=init();
     if(status<0){
-        printf("init error!\n");
+        printf("program error!\n");
         _exit(1);
     }
-
+    pthread_create(&recv,NULL,recv_thread,NULL);
+    pthread_create(&send,NULL,send_thread,NULL);
 }
+
 
 int main(){
     pthread_t main;
