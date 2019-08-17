@@ -169,12 +169,18 @@ int init(){
     client.sin_family = AF_INET;
     client.sin_addr.s_addr = inet_addr(CLIENT_NAT_IP_ADDR);
     client.sin_port = htons(DEFAULT_UDP_PORT);
-    connect(sock_udp_fd,(sockaddr*)&client,sizeof(sockaddr));
+    int n =  connect(sock_udp_fd,(sockaddr*)&client,sizeof(sockaddr));
+    if(n<0){
+	perror("connect error\n");
+    }
     sockaddr_in serA;
     serA.sin_family = AF_INET;
-    serA.sin_addr.s_addr = inet_addr(SERVER_A_IP_ADDR);
+    serA.sin_addr.s_addr = inet_addr(SERVER_A_SUBNET_IP_ADDR);
     serA.sin_port = htons(DEFAULT_UDP_PORT);
-    bind(sock_udp_fd,(sockaddr*)&serA,sizeof(sockaddr));
+    n = bind(sock_udp_fd,(sockaddr*)&serA,sizeof(sockaddr));
+    if(n<0){
+	perror("bind error\n");
+    }
 
     /*初始化发送接收raw socket */
     sock_raw_fd = socket(AF_PACKET,SOCK_RAW,htons(ETH_P_IP));
@@ -213,14 +219,13 @@ void* recv_thread(void*){
         if(n == 0){
             continue;
 	}else if(n > 0){
-		printf("select right\n");
             if(FD_ISSET(sock_udp_fd,&read_set)){ /*udp有数据 */
                 packet *data = new packet;
                 data->data = new u_char[MAX_DATA_SIZE];
             //    int n = recv(sock_udp_fd,data->data,MAX_DATA_SIZE,0);
                 int n = recv_udp_unpack_to_ip(sock_udp_fd,data->data,&(data->data_len));
                 printf("udp:\n");
-                print_data(data->data,n);
+                print_data(data->data,data->data_len);
                 if(n < 0){
                     printf("udp recv() error\n");
                     delete data->data;
@@ -281,7 +286,7 @@ void* send_thread(void*){
         pthread_mutex_unlock(&pthread_mutex);
         u_int32_t *data32 = (u_int32_t*)(data->data);
         u_int32_t src_ip = *(data32+3);
-        u_int32_t dest_ip = *(data32+3);
+        u_int32_t dest_ip = *(data32+4);
         if(src_ip == inet_addr(IPGW_IP_ADDR)){ /*来自于ipgw的包 */
             int err = send_ip_ll(sock_raw_fd,data->data,data->data_len,addr_ll,SERVER_A_MAC,SERVER_B_MAC);
             if(err<0){
@@ -289,14 +294,16 @@ void* send_thread(void*){
             }
         }else if(src_ip == inet_addr(CLIENT_SUBNET_IP_ADDR)){
             if(dest_ip==inet_addr(IPGW_IP_ADDR)
-                    &&(*data->data+32)==0x02){    /*若是发送到ipgw的握手包则转发到client */
+                    &&*(data->data+33)==0x02){    /*若是发送到ipgw的握手包则转发到client */
                 int n = send(sock_udp_fd,data->data,data->data_len,0);
+		printf("sended udp\n");
                 if(n<0){
                     perror("send tcp dgram error");
                 }
             }else{          /*否则发到网关 让网关处理 也就是伪装ip直接发送ipgw */
                 int err = send_ip_ll(sock_raw_fd,data->data,data->data_len,addr_ll,SERVER_A_MAC,GATEWAY_MAC);
-                if(err<0){
+                printf("sended tcp\n");
+		if(err<0){
                     printf("send_ip_ll to ipgw error!\n");
                 }
             }
