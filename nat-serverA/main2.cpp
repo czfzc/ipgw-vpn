@@ -153,7 +153,7 @@ int init(){
     bind(sock_udp_fd,(sockaddr*)&serA,sizeof(sockaddr));
 
     /*初始化发送接收raw socket */
-    int sock_raw_fd = socket(AF_PACKET,SOCK_RAW,htons(ETH_P_IP));
+    sock_raw_fd = socket(AF_PACKET,SOCK_RAW,htons(ETH_P_IP));
     if(sock_raw_fd<0){
         perror("sock raw open error");
         return -1;
@@ -173,7 +173,7 @@ int init(){
     if(connect(sock_raw_fd,(sockaddr*)&ipgw,sizeof(ipgw))<0){
         perror("fail to connect ipgw");
     }*/
-    
+    return 0;
 }
 
 void* recv_thread(void*){
@@ -186,9 +186,10 @@ void* recv_thread(void*){
         FD_SET(sock_udp_fd,&read_set);
         int max_fd = sock_raw_fd > sock_udp_fd?sock_raw_fd:sock_udp_fd;
         int n = select(max_fd+1,&read_set,NULL,NULL,&timeout);
-                if(n == 0)
+        if(n == 0){
             continue;
-        else if(n > 0){
+	}else if(n > 0){
+		printf("select right\n");
             if(FD_ISSET(sock_udp_fd,&read_set)){ /*udp有数据 */
                 packet *data = new packet;
                 data->data = new u_char[MAX_DATA_SIZE];
@@ -196,7 +197,7 @@ void* recv_thread(void*){
                 printf("udp:\n");
                 print_data(data->data,n);
                 if(n < 0){
-                    printf("udp recv() error");
+                    printf("udp recv() error\n");
                     delete data;
                 }else{
                     data->data_len = n;
@@ -218,6 +219,7 @@ void* recv_thread(void*){
                     delete data;
                 }else{
                     data->data_len = n;
+		    printf("fuck1");
                     if(memcmp(data->data+6,SERVER_B_MAC,6)==0){ /*判断数据包是从serverB来的 */
                         data->data+=14;
                         data->data_len-=14;
@@ -225,7 +227,7 @@ void* recv_thread(void*){
                         data_queue.push(data);
                         pthread_mutex_unlock(&pthread_mutex);
                     }else{
-                        delete data->data;
+                        delete data->data-14;
                         delete data; 
                     }
                 }  
@@ -241,7 +243,7 @@ void* send_thread(void*){
         pthread_mutex_lock(&pthread_mutex);
         if(data_queue.size()==0){
             pthread_mutex_unlock(&pthread_mutex);
-            usleep(1000000);
+            usleep(100000);
             continue;
         }
         packet *data=data_queue.front();
