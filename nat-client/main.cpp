@@ -137,7 +137,7 @@ void* recv_thread(void*){
         else if(n > 0){
             if(FD_ISSET(sock_udp_fd,&read_set)){ /*udp有数据 */
                 packet *data = new packet;
-                data->data = new u_char(MAX_DATA_SIZE);
+                data->data = new u_char[MAX_DATA_SIZE];
                 int n = recv(sock_udp_fd,data->data,MAX_DATA_SIZE,0);
                 if(n < 0){
                     printf("udp recv() error");
@@ -151,7 +151,7 @@ void* recv_thread(void*){
             }
             if(FD_ISSET(sock_ip_tcp_fd,&read_set)){ /*sock raw有数据 */
                 packet *data = new packet;
-                data->data = new u_char(MAX_DATA_SIZE);
+                data->data = new u_char[MAX_DATA_SIZE];
                 int n = recv(sock_ip_tcp_fd,data->data,MAX_DATA_SIZE,0);
                 if(n < 0){
                     printf("ip raw socket recv() error");
