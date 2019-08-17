@@ -30,7 +30,7 @@ using namespace std;
 
 u_char SERVER_A_MAC[6]={0x02,0x42,0xac,0x11,0x00,0x02};
 u_char SERVER_B_MAC[6]={0x02,0x42,0xac,0x11,0x00,0x03};
-u_char GATEWAY_MAC[6]={0x38,0x97,0xd6,0x51,0xa0,0xa2};
+u_char GATEWAY_MAC[6]={0x02,0x42,0x51,0xda,0x83,0x3b};
 
 typedef struct{
     uint32_t data_len;
@@ -124,8 +124,9 @@ int send_ip_ll(int sock_raw_fd,u_char *ip_tcp_data,int data_len,sockaddr_ll addr
     u_int16_t *data16 = (u_int16_t*)buf;
     data16[6]=htons(ETH_P_IP);
     memcpy(buf+14,ip_tcp_data,data_len);
-    //printf("====");
-    //print_data(buf,data_len+14);
+    printf("====\n");
+    print_data(buf,data_len+14);
+    printf("\n");
     int len=sendto(sock_raw_fd,buf,(size_t)(data_len+14),0,(sockaddr*)&addr,socklen);
     if(len<0){
 	printf("error sendto,errno:%d\n",errno);
@@ -224,14 +225,13 @@ void* recv_thread(void*){
             //    int n = recv(sock_udp_fd,data->data,MAX_DATA_SIZE,0);
                 int n = recv_udp_unpack_to_ip(sock_udp_fd,data->data,&(data->data_len));
                 printf("udp:\n");
-                print_data(data->data,data->data_len);
+             //   print_data(data->data,data->data_len);
                 if(n < 0){
                     printf("udp recv() error\n");
                     delete data->data;
                     delete data;
                 }else{
                     printf("udp receved");
-                    data->data_len = n;
                     pthread_mutex_lock(&pthread_mutex);
                     data_queue.push(data);
                     pthread_mutex_unlock(&pthread_mutex);
@@ -243,7 +243,7 @@ void* recv_thread(void*){
                 socklen_t socklen=sizeof(sockaddr_ll);
                 int n = recvfrom(sock_raw_fd,data->data,MAX_DATA_SIZE,0,(sockaddr*)&addr_ll,&socklen);
                 printf("raw:\n");
-                print_data(data->data,n);
+              //  print_data(data->data,n);
                 if(n < 0){
                     printf("raw socket recvfrom() error");
                     delete data->data;
@@ -251,7 +251,7 @@ void* recv_thread(void*){
                 }else{
                     data->data_len = n;
                     if(memcmp(data->data+6,SERVER_B_MAC,6)==0&&*(data->data+23)==0x06){ /*判断是从serverB来的tcp数据包 */
-                        printf("raw receved");
+                        printf("raw receved\n");
                         u_char temp[MAX_DATA_SIZE];
                         memcpy(temp,data->data+14,data->data_len-14);
                         memcpy(data->data,temp,data->data_len-14);
@@ -260,7 +260,7 @@ void* recv_thread(void*){
                         data_queue.push(data);
                         pthread_mutex_unlock(&pthread_mutex);
                     }else{
-                        printf("raw unreceved");
+                        printf("raw unreceved\n");
                         delete data->data;
                         delete data; 
                     }
@@ -288,8 +288,9 @@ void* send_thread(void*){
         u_int32_t dest_ip = *(data32+4);
         if(src_ip == inet_addr(IPGW_IP_ADDR)){ /*来自于ipgw的包 */
             int err = send_ip_ll(sock_raw_fd,data->data,data->data_len,addr_ll,SERVER_A_MAC,SERVER_B_MAC);
-            if(err<0){
-                printf("send_ip_ll to ipgw error!\n");
+           printf("\nsended ack from ipge\n");
+	    if(err<0){
+                printf("send_ip_ll to serb error!\n");
             }
         }else if(src_ip == inet_addr(CLIENT_SUBNET_IP_ADDR)){
             if(dest_ip==inet_addr(IPGW_IP_ADDR)
@@ -300,8 +301,8 @@ void* send_thread(void*){
                     perror("send tcp dgram error");
                 }
             }else{          /*否则发到网关 让网关处理 也就是伪装ip直接发送ipgw */
-                int err = send_ip_ll(sock_raw_fd,data->data,data->data_len,addr_ll,SERVER_A_MAC,GATEWAY_MAC);
-                printf("sended tcp\n");
+                printf("\nhhahasb\n");
+		    int err = send_ip_ll(sock_raw_fd,data->data,data->data_len,addr_ll,SERVER_A_MAC,GATEWAY_MAC);
 		if(err<0){
                     printf("send_ip_ll to ipgw error!\n");
                 }
