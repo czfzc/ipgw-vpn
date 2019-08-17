@@ -215,6 +215,15 @@ int init(){
         perror("ip raw socket open error");
         return -1;
     }
+
+    int  one = 1;
+	const int *val = &one;
+	if (setsockopt(sock_ip_tcp_fd, IPPROTO_IP, IP_HDRINCL, val, sizeof(int)))
+	{
+		perror("setsockopt() error");
+		_exit(-1);
+	}
+
     sockaddr_in ipgw;
     ipgw.sin_family = AF_INET;
     ipgw.sin_addr.s_addr = inet_addr(IPGW_IP_ADDR);
