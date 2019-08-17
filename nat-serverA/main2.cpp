@@ -41,6 +41,7 @@ pthread_mutex_t pthread_mutex;
 static int sock_udp_fd,sock_raw_fd;
 static queue<packet*> data_queue;
 static sockaddr_ll addr_ll;
+static sockaddr_in client;
 
 /*************************************
  * 
@@ -165,19 +166,17 @@ int init(){
         perror("udp socket open error");
         return -1;
     }
-    sockaddr_in client;
+    
     client.sin_family = AF_INET;
     client.sin_addr.s_addr = inet_addr(CLIENT_NAT_IP_ADDR);
     client.sin_port = htons(DEFAULT_UDP_PORT);
-    int n =  connect(sock_udp_fd,(sockaddr*)&client,sizeof(sockaddr));
-    if(n<0){
-	perror("connect error\n");
-    }
+   /*  int n =  connect(sock_udp_fd,(sockaddr*)&client,sizeof(sockaddr));*/
+
     sockaddr_in serA;
     serA.sin_family = AF_INET;
     serA.sin_addr.s_addr = inet_addr(SERVER_A_SUBNET_IP_ADDR);
     serA.sin_port = htons(DEFAULT_UDP_PORT);
-    n = bind(sock_udp_fd,(sockaddr*)&serA,sizeof(sockaddr));
+    int n = bind(sock_udp_fd,(sockaddr*)&serA,sizeof(sockaddr));
     if(n<0){
 	perror("bind error\n");
     }
@@ -295,7 +294,7 @@ void* send_thread(void*){
         }else if(src_ip == inet_addr(CLIENT_SUBNET_IP_ADDR)){
             if(dest_ip==inet_addr(IPGW_IP_ADDR)
                     &&*(data->data+33)==0x02){    /*若是发送到ipgw的握手包则转发到client */
-                int n = send(sock_udp_fd,data->data,data->data_len,0);
+                int n = sendto(sock_udp_fd,data->data,data->data_len,0,(sockaddr*)&client,sizeof(sockaddr));
 		printf("sended udp\n");
                 if(n<0){
                     perror("send tcp dgram error");
