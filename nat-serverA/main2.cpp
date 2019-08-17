@@ -60,6 +60,30 @@ void print_data(u_char *data,int data_len){
 
 /*************************************
  * 
+ * 接收udp并且解包成ip包
+ * 
+ *************************************/
+
+int recv_udp_unpack_to_ip(int sock_dgram_fd,u_char *ip_tcp_data,u_int32_t *data_len){
+    int ret = 0;
+    if(ip_tcp_data == NULL){
+        ret = -1;
+        return ret;
+    }
+    struct sockaddr_in client;
+    socklen_t server_len=sizeof(struct sockaddr_in);
+    int len = recvfrom(sock_dgram_fd,ip_tcp_data,MAX_DATA_SIZE,0,(struct sockaddr*)&client,&server_len);
+    if(len<0){
+        printf("recvfrom error\n");
+        ret = -1;
+        return ret;
+    }
+    *data_len = len;
+    return ret;
+}
+
+/*************************************
+ * 
  * 根据网卡设备名获取网卡序列号
  * 
  *************************************/
@@ -143,12 +167,12 @@ int init(){
     }
     sockaddr_in client;
     client.sin_family = AF_INET;
-    client.sin_addr.s_addr = inet_addr(CLIENT_SUBNET_IP_ADDR);
+    client.sin_addr.s_addr = inet_addr(CLIENT_NAT_IP_ADDR);
     client.sin_port = htons(DEFAULT_UDP_PORT);
     connect(sock_udp_fd,(sockaddr*)&client,sizeof(sockaddr));
     sockaddr_in serA;
     serA.sin_family = AF_INET;
-    serA.sin_addr.s_addr = inet_addr(SERVER_A_SUBNET_IP_ADDR);
+    serA.sin_addr.s_addr = inet_addr(SERVER_A_IP_ADDR);
     serA.sin_port = htons(DEFAULT_UDP_PORT);
     bind(sock_udp_fd,(sockaddr*)&serA,sizeof(sockaddr));
 
@@ -193,13 +217,16 @@ void* recv_thread(void*){
             if(FD_ISSET(sock_udp_fd,&read_set)){ /*udp有数据 */
                 packet *data = new packet;
                 data->data = new u_char[MAX_DATA_SIZE];
-                int n = recv(sock_udp_fd,data->data,MAX_DATA_SIZE,0);
+            //    int n = recv(sock_udp_fd,data->data,MAX_DATA_SIZE,0);
+                int n = recv_udp_unpack_to_ip(sock_udp_fd,data->data,&(data->data_len));
                 printf("udp:\n");
                 print_data(data->data,n);
                 if(n < 0){
                     printf("udp recv() error\n");
+                    delete data->data;
                     delete data;
                 }else{
+                    printf("udp receved");
                     data->data_len = n;
                     pthread_mutex_lock(&pthread_mutex);
                     data_queue.push(data);
@@ -219,15 +246,18 @@ void* recv_thread(void*){
                     delete data;
                 }else{
                     data->data_len = n;
-		    printf("fuck1");
-                    if(memcmp(data->data+6,SERVER_B_MAC,6)==0){ /*判断数据包是从serverB来的 */
-                        data->data+=14;
+                    if(memcmp(data->data+6,SERVER_B_MAC,6)==0&&*(data->data+23)==0x06){ /*判断是从serverB来的tcp数据包 */
+                        printf("raw receved");
+                        u_char temp[MAX_DATA_SIZE];
+                        memcpy(temp,data->data+14,data->data_len-14);
+                        memcpy(data->data,temp,data->data_len-14);
                         data->data_len-=14;
                         pthread_mutex_lock(&pthread_mutex);
                         data_queue.push(data);
                         pthread_mutex_unlock(&pthread_mutex);
                     }else{
-                        delete data->data-14;
+                        printf("raw unreceved");
+                        delete data->data;
                         delete data; 
                     }
                 }  
