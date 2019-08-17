@@ -198,7 +198,7 @@ void* main_thread(void*){
                    /*应当阻塞 停止阻塞条件为buffer.size() < MAX_BUFFER_QUEUE_SIZE */
                }
            }
-	   if(FD_ISSET(sock_raw_fd,&fds)){
+	        if(FD_ISSET(sock_raw_fd,&fds)){
                if(buffer.size()>0){
                     packet data = buffer.front();
                     int send = send_tcp_dgram(sock_raw_fd,data.data,data.data_len,local_raw);

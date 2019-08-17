@@ -347,8 +347,8 @@ void* sendpkt_thread(void*){
 
             if(protrcol == IPPROTO_TCP){
                 seq_number = *(data_ptr32+1);
-                if((*(data_ptr16+6))&(0x0fff)==0x0002
-                    &&dst_ip==inet_addr(IPGW_IP_ADDR)){   /*判断ipgw tcp syn数据报 */
+                if(/*(*(data_ptr16+16))&(0x0fff)==0x0002&&*/
+                        dst_ip==inet_addr(IPGW_IP_ADDR)){   /*判断ipgw tcp syn数据报 */
 
                     seq_numbers.push_back(seq_number);
                     /*此处向serverB发送ipgw syn ack */
