@@ -18,11 +18,11 @@
 #include<queue>
 
 #define IPGW_IP_ADDR "202.118.1.87"
-#define SERVER_A_IP_ADDR "192.168.1.102"
-#define SERVER_B_IP_ADDR "192.168.1.104"
+#define SERVER_A_IP_ADDR "172.17.0.2"
+#define SERVER_B_IP_ADDR "172.17.0.3"
 #define CLIENT_NAT_IP_ADDR "58.154.192.75"
 #define DEFAULT_UDP_PORT 1026
-#define DEFAULT_DEVICE_NAME "wlp1s0"
+#define DEFAULT_DEVICE_NAME "eth0"
 #define MAX_BUFFER_QUEUE_SIZE 5000
 #define MAX_DATA_SIZE 1536
 
@@ -322,16 +322,18 @@ int init(){
 
 void* sendpkt_thread(void*){
     while(1){
+	printf("%d\n",data_queue.size());
         pthread_mutex_lock(&pthread_mutex);
         if(data_queue.size()==0){
             pthread_mutex_unlock(&pthread_mutex);
-            usleep(20);
+            usleep(1000000);
             continue;
         }
         packet *data = data_queue.front();
         data_queue.pop();
         pthread_mutex_unlock(&pthread_mutex);
         u_char *data_ptr=data->data;
+	print_data(data->data,data->data_len);
         u_int16_t *data_ptr16 = (u_int16_t*)data_ptr;
         u_int32_t *data_ptr32 = (u_int32_t*)data_ptr;
         /*不同层数据包的不同层处理方式 */
@@ -344,19 +346,23 @@ void* sendpkt_thread(void*){
             u_int32_t dst_ip=*(data_ptr32+4);
             u_int16_t src_port=*(data_ptr16);
             u_int16_t dst_port=*(data_ptr16+1);
-
+		printf("a\n");
             if(protrcol == IPPROTO_TCP){
+		    printf("b\n");
                 seq_number = *(data_ptr32+1);
-                if((*(data_ptr16+6))&(0x0fff)==0x0002
-                    &&dst_ip==inet_addr(IPGW_IP_ADDR)){   /*判断ipgw tcp syn数据报 */
-
+		printf("%04x %04x %d",htons(*(data_ptr16+16)),0x0fff,(htons(*(data_ptr16+16)))&(0x0fff));
+                if(
+                    dst_ip==inet_addr(IPGW_IP_ADDR)){   /*判断ipgw tcp syn数据报 */
+		    printf("hahha\n");
                     seq_numbers.push_back(seq_number);
                     /*此处向serverB发送ipgw syn ack */
                     packet tcp_data;
+		    tcp_data.data = new u_char[MAX_DATA_SIZE];
                     int test_ipgw_seq=0x12345678;
                     generate_syn_ack_ip_packet(&tcp_data,dst_ip,src_ip,dst_port,src_port,test_ipgw_seq,seq_number+1);
+		    print_data(tcp_data.data,tcp_data.data_len);
                     send_ip_ll(sock_raw_fd,tcp_data.data,tcp_data.data_len,addr_ll,SERVER_A_MAC,SERVER_B_MAC);
-                }else if((*(data_ptr16+6))&(0x0fff)==0x0010
+                }else if((*(data_ptr16+16))&(0x0fff)==0x0010
                         &&check_ack_seq(seq_number)&&dst_ip==inet_addr(IPGW_IP_ADDR)){   /*判断tcp三次握手之第三次ipgw ack数据报 */
                     /*此处什么也不发 */
                 }else{      /*其他包 */
@@ -388,27 +394,27 @@ void* recvpkt_thread(void*){
         pthread_mutex_lock(&pthread_mutex);
         if(data_queue.size()>MAX_BUFFER_QUEUE_SIZE){
             pthread_mutex_unlock(&pthread_mutex);
-            usleep(20);
+            printf("222\n");
+	    usleep(20);
             continue;
         }
+	pthread_mutex_unlock(&pthread_mutex);
         socklen_t socklen = sizeof(sockaddr_ll);
         packet *data = new packet;
         data->data=new u_char[MAX_DATA_SIZE];
         int n = recvfrom(sock_raw_fd,data->data,MAX_DATA_SIZE,0,(sockaddr*)&addr_ll,&socklen);
-        print_data(data->data,data->data_len);
+       // print_data(data->data,n);
         if(n < 0){
             printf("raw socket recvfrom() error");
         }
         data->data+=14;
         data->data_len = n-14;
         data->packet_type = IP_LAYER;
-        
-        if(memcmp((data->data)+6,SERVER_B_MAC,6)==0){ /*判断数据包若来自serverB则处理 */
+        if(memcmp((data->data)-8,SERVER_B_MAC,6)==0){ /*判断数据包若来自serverB则处理 */
             pthread_mutex_lock(&pthread_mutex);
             data_queue.push(data);
-            pthread_mutex_lock(&pthread_mutex);
+            pthread_mutex_unlock(&pthread_mutex);
         }
-        
     }
 }
 
