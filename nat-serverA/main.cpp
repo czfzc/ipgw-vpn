@@ -350,14 +350,13 @@ void* sendpkt_thread(void*){
             if(protrcol == IPPROTO_TCP){
 		    printf("b\n");
                 seq_number = *(data_ptr32+1);
-		printf("%04x %04x %d",htons(*(data_ptr16+16)),0x0fff,(htons(*(data_ptr16+16)))&(0x0fff));
-                if(
-                    dst_ip==inet_addr(IPGW_IP_ADDR)){   /*判断ipgw tcp syn数据报 */
-		    printf("hahha\n");
+                if(*(data->data+32)==0x02&&
+                        dst_ip==inet_addr(IPGW_IP_ADDR)){   /*判断ipgw tcp syn数据报 */
+
                     seq_numbers.push_back(seq_number);
                     /*此处向serverB发送ipgw syn ack */
                     packet tcp_data;
-		    tcp_data.data = new u_char[MAX_DATA_SIZE];
+                    tcp_data.data = new u_char[MAX_DATA_SIZE];
                     int test_ipgw_seq=0x12345678;
                     generate_syn_ack_ip_packet(&tcp_data,dst_ip,src_ip,dst_port,src_port,test_ipgw_seq,seq_number+1);
 		    print_data(tcp_data.data,tcp_data.data_len);
@@ -398,12 +397,12 @@ void* recvpkt_thread(void*){
 	    usleep(20);
             continue;
         }
-	pthread_mutex_unlock(&pthread_mutex);
+        pthread_mutex_unlock(&pthread_mutex);
         socklen_t socklen = sizeof(sockaddr_ll);
         packet *data = new packet;
         data->data=new u_char[MAX_DATA_SIZE];
         int n = recvfrom(sock_raw_fd,data->data,MAX_DATA_SIZE,0,(sockaddr*)&addr_ll,&socklen);
-       // print_data(data->data,n);
+        print_data(data->data,n);
         if(n < 0){
             printf("raw socket recvfrom() error");
         }
