@@ -169,17 +169,17 @@ int init(){
         perror("udp socket open error");
         return -1;
     }
-    
+    /* 
     client.sin_family = AF_INET;
     client.sin_addr.s_addr = inet_addr(CLIENT_NAT_IP_ADDR);
     client.sin_port = htons(DEFAULT_UDP_PORT);
      int n =  connect(sock_udp_fd,(sockaddr*)&client,sizeof(sockaddr));
-
+    */
     sockaddr_in serA;
     serA.sin_family = AF_INET;
     serA.sin_addr.s_addr = inet_addr(SERVER_A_IP_ADDR);
     serA.sin_port = htons(DEFAULT_UDP_PORT);
-    n = bind(sock_udp_fd,(sockaddr*)&serA,sizeof(sockaddr));
+    int n = bind(sock_udp_fd,(sockaddr*)&serA,sizeof(sockaddr));
     if(n<0){
 	perror("bind error\n");
     }
