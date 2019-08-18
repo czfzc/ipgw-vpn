@@ -147,7 +147,7 @@ int send_ip_ll(int sock_raw_fd,u_char *ip_tcp_data,int data_len,sockaddr_ll addr
 void get_default_sockaddr_ll_send(int fd,sockaddr_ll *addr_ll,char *nic_name)
 {
     memset(addr_ll,0,sizeof(addr_ll));
-    addr_ll->sll_ifindex=get_nic_index(fd,nic_name);
+    addr_ll->sll_ifindex=if_nametoindex(nic_name);
     addr_ll->sll_family=PF_PACKET;
     addr_ll->sll_halen=ETH_ALEN;
 }
@@ -177,7 +177,7 @@ int init(){
 
     sockaddr_in serA;
     serA.sin_family = AF_INET;
-    serA.sin_addr.s_addr = inet_addr(SERVER_A_SUBNET_IP_ADDR);
+    serA.sin_addr.s_addr = inet_addr(SERVER_A_IP_ADDR);
     serA.sin_port = htons(DEFAULT_UDP_PORT);
     int n = bind(sock_udp_fd,(sockaddr*)&serA,sizeof(sockaddr));
     if(n<0){
