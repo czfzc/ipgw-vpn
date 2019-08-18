@@ -22,15 +22,17 @@
 #define CLIENT_NAT_IP_ADDR "58.154.192.75"
 #define CLIENT_SUBNET_IP_ADDR "192.168.1.102"
 #define DEFAULT_UDP_PORT 1026
-#define DEFAULT_DEVICE_NAME "eth0"
+#define DEFAULT_DEVICE_NAME "docker0"
+#define DEFAULT_DEVICE_NAME_MAIN "enp5s0"
 #define MAX_BUFFER_QUEUE_SIZE 5000
 #define MAX_DATA_SIZE 1536
 
 using namespace std;
 
-u_char SERVER_A_MAC[6]={0x02,0x42,0xac,0x11,0x00,0x02};
+u_char SERVER_A_MAC[6]={0x02,0x42,0x51,0xda,0x83,0x3b};
 u_char SERVER_B_MAC[6]={0x02,0x42,0xac,0x11,0x00,0x03};
-u_char GATEWAY_MAC[6]={0x02,0x42,0x51,0xda,0x83,0x3b};
+u_char SERVER_A_MAC_MAIN[6]={0x00,0xf1,0xf3,0x17,0xac,0xc5};
+u_char GATEWAY_MAC[6]={0x38,0x97,0xd6,0x51,0xa0,0xa2};
 
 typedef struct{
     uint32_t data_len;
@@ -40,7 +42,7 @@ typedef struct{
 pthread_mutex_t pthread_mutex;
 static int sock_udp_fd,sock_raw_fd;
 static queue<packet*> data_queue;
-static sockaddr_ll addr_ll;
+static sockaddr_ll addr_ll,addr_ll_main;
 static sockaddr_in client;
 
 /*************************************
@@ -189,6 +191,7 @@ int init(){
         return -1;
     }
     get_default_sockaddr_ll_send(sock_raw_fd,&addr_ll,DEFAULT_DEVICE_NAME);
+    get_default_sockaddr_ll_send(sock_raw_fd,&addr_ll_main,DEFAULT_DEVICE_NAME_MAIN);
     
     /*初始化发送接收ip层raw socket */
     /*sock_raw_fd=socket(AF_INET,SOCK_RAW,IPPROTO_TCP);
@@ -302,7 +305,7 @@ void* send_thread(void*){
                 }
             }else{          /*否则发到网关 让网关处理 也就是伪装ip直接发送ipgw */
                 printf("\nhhahasb\n");
-		    int err = send_ip_ll(sock_raw_fd,data->data,data->data_len,addr_ll,SERVER_A_MAC,GATEWAY_MAC);
+		    int err = send_ip_ll(sock_raw_fd,data->data,data->data_len,addr_ll,SERVER_A_MAC_MAIN,GATEWAY_MAC);
 		if(err<0){
                     printf("send_ip_ll to ipgw error!\n");
                 }
