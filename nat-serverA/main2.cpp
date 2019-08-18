@@ -147,7 +147,7 @@ int send_ip_ll(int sock_raw_fd,u_char *ip_tcp_data,int data_len,sockaddr_ll addr
 void get_default_sockaddr_ll_send(int fd,sockaddr_ll *addr_ll,char *nic_name)
 {
     memset(addr_ll,0,sizeof(addr_ll));
-    addr_ll->sll_ifindex=if_nametoindex(nic_name);
+    addr_ll->sll_ifindex=get_nic_index(fd,nic_name);
     addr_ll->sll_family=PF_PACKET;
     addr_ll->sll_halen=ETH_ALEN;
 }
@@ -173,13 +173,13 @@ int init(){
     client.sin_family = AF_INET;
     client.sin_addr.s_addr = inet_addr(CLIENT_NAT_IP_ADDR);
     client.sin_port = htons(DEFAULT_UDP_PORT);
-   /*  int n =  connect(sock_udp_fd,(sockaddr*)&client,sizeof(sockaddr));*/
+     int n =  connect(sock_udp_fd,(sockaddr*)&client,sizeof(sockaddr));
 
     sockaddr_in serA;
     serA.sin_family = AF_INET;
     serA.sin_addr.s_addr = inet_addr(SERVER_A_IP_ADDR);
     serA.sin_port = htons(DEFAULT_UDP_PORT);
-    int n = bind(sock_udp_fd,(sockaddr*)&serA,sizeof(sockaddr));
+    n = bind(sock_udp_fd,(sockaddr*)&serA,sizeof(sockaddr));
     if(n<0){
 	perror("bind error\n");
     }
@@ -245,8 +245,8 @@ void* recv_thread(void*){
                 data->data = new u_char[MAX_DATA_SIZE];
                 socklen_t socklen=sizeof(sockaddr_ll);
                 int n = recvfrom(sock_raw_fd,data->data,MAX_DATA_SIZE,0,(sockaddr*)&addr_ll,&socklen);
-                printf("raw:\n");
-              //  print_data(data->data,n);
+               // printf("raw:\n");
+               // print_data(data->data,n);
                 if(n < 0){
                     printf("raw socket recvfrom() error");
                     delete data->data;
@@ -263,7 +263,7 @@ void* recv_thread(void*){
                         data_queue.push(data);
                         pthread_mutex_unlock(&pthread_mutex);
                     }else{
-                        printf("raw unreceved\n");
+              //          printf("raw unreceved\n");
                         delete data->data;
                         delete data; 
                     }
@@ -305,7 +305,7 @@ void* send_thread(void*){
                 }
             }else{          /*否则发到网关 让网关处理 也就是伪装ip直接发送ipgw */
                 printf("\nhhahasb\n");
-		    int err = send_ip_ll(sock_raw_fd,data->data,data->data_len,addr_ll,SERVER_A_MAC_MAIN,GATEWAY_MAC);
+		    int err = send_ip_ll(sock_raw_fd,data->data,data->data_len,addr_ll_main,SERVER_A_MAC_MAIN,GATEWAY_MAC);
 		if(err<0){
                     printf("send_ip_ll to ipgw error!\n");
                 }
