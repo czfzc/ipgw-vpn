@@ -274,7 +274,7 @@ void* recv_thread(void*){
                         u_int16_t ip_hdr_len = bt/4;
                         printf("ip_hdr_len:%d\n",ip_hdr_len);
                         u_int32_t *data32 = (u_int32_t*)data->data; 
-                        if(*(data->data+33)!=0x02){
+                        if(*(data->data+33)!=0x02){ //控制握手包才发送至client
                             *(data32+3) = inet_addr(CLIENT_NAT_IP_ADDR);
                         }
                         u_int32_t src_ip = *(data32+3);
@@ -317,15 +317,14 @@ void* send_thread(void*){
 	   if(err<0){
                 printf("send_ip_ll to serb error!\n");
             }
-        }else if(src_ip == inet_addr(CLIENT_SUBNET_IP_ADDR)){
-            if(dest_ip==inet_addr(IPGW_IP_ADDR)
-                    &&*(data->data+33)==0x02){    /*若是发送到ipgw的握手包则转发到client */
+        }else if(dest_ip==inet_addr(IPGW_IP_ADDR)){
+            if(src_ip==inet_addr(CLIENT_SUBNET_IP_ADDR)){    /*源为nat内网则发送到client */
                 int n = sendto(sock_udp_fd,data->data,data->data_len,0,(sockaddr*)&client,sizeof(sockaddr));
 		printf("sended udp\n");
                 if(n<0){
                     perror("send tcp dgram error");
                 }
-            }else{          /*否则发到网关 让网关处理 也就是伪装ip直接发送ipgw */
+            }else if(src_ip==inet_addr(CLIENT_NAT_IP_ADDR)){          /*否则发到网关 让网关处理 也就是伪装ip直接发送ipgw */
                 printf("\nhhahasb\n");
 		    int err = send_ip_ll(sock_raw_fd,data->data,data->data_len,addr_ll_main,SERVER_A_MAC_MAIN,GATEWAY_MAC);
 		if(err<0){
