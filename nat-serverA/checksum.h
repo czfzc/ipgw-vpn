@@ -64,7 +64,7 @@ void getsum_ip_packet(unsigned char *_buffer)
  * 
  *************************************/
 
-void getsum_tcp_packet(u_char *buffer,int data_len,int src_ip,int dest_ip)
+void getsum_tcp_packet(u_char *buffer,u_int16_t data_len,u_int32_t src_ip,u_int32_t dest_ip)
 {
     u_int16_t *buf16=(u_int16_t*)buffer;
     *(buf16+8)=0x0000; /*原校验和置0 */ 
