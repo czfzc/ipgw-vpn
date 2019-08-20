@@ -81,6 +81,7 @@ int recv_udp_unpack_to_ip(int sock_dgram_fd,u_char *ip_tcp_data,u_int32_t *data_
         ret = -1;
         return ret;
     }
+    printf("len %d\n",len);
     *data_len = len;
     return ret;
 }
@@ -169,11 +170,11 @@ int init(){
         perror("udp socket open error");
         return -1;
     }
-    /* 
+     
     client.sin_family = AF_INET;
     client.sin_addr.s_addr = inet_addr(CLIENT_NAT_IP_ADDR);
     client.sin_port = htons(DEFAULT_UDP_PORT);
-     int n =  connect(sock_udp_fd,(sockaddr*)&client,sizeof(sockaddr));
+    /* int n =  connect(sock_udp_fd,(sockaddr*)&client,sizeof(sockaddr));
     */
     sockaddr_in serA;
     serA.sin_family = AF_INET;
@@ -227,7 +228,8 @@ void* recv_thread(void*){
                 data->data = new u_char[MAX_DATA_SIZE];
             //    int n = recv(sock_udp_fd,data->data,MAX_DATA_SIZE,0);
                 int n = recv_udp_unpack_to_ip(sock_udp_fd,data->data,&(data->data_len));
-                printf("udp:\n");
+                printf("datalen: %d\n",data->data_len);
+		printf("udp:\n");
              //   print_data(data->data,data->data_len);
                 if(n < 0){
                     printf("udp recv() error\n");
@@ -244,7 +246,8 @@ void* recv_thread(void*){
                 packet *data = new packet;
                 data->data = new u_char[MAX_DATA_SIZE];
                 socklen_t socklen=sizeof(sockaddr_ll);
-                int n = recvfrom(sock_raw_fd,data->data,MAX_DATA_SIZE,0,(sockaddr*)&addr_ll,&socklen);
+		sockaddr_ll addr_recv;
+                int n = recvfrom(sock_raw_fd,data->data,MAX_DATA_SIZE,0,(sockaddr*)&addr_recv,&socklen);
                // printf("raw:\n");
                // print_data(data->data,n);
                 if(n < 0){
@@ -253,7 +256,7 @@ void* recv_thread(void*){
                     delete data;
                 }else{
                     data->data_len = n;
-                    if(memcmp(data->data+6,SERVER_B_MAC,6)==0&&*(data->data+23)==0x06){ /*判断是从serverB来的tcp数据包 */
+                    if(memcmp(data->data+6,SERVER_B_MAC,6)==0&&*(data->data+23)==0x06&&*(data->data+47)!=0x12){ /*判断是从serverB来的tcp数据包 */
                         printf("raw receved\n");
                         u_char temp[MAX_DATA_SIZE];
                         memcpy(temp,data->data+14,data->data_len-14);
@@ -291,8 +294,9 @@ void* send_thread(void*){
         u_int32_t dest_ip = *(data32+4);
         if(src_ip == inet_addr(IPGW_IP_ADDR)){ /*来自于ipgw的包 */
             int err = send_ip_ll(sock_raw_fd,data->data,data->data_len,addr_ll,SERVER_A_MAC,SERVER_B_MAC);
-           printf("\nsended ack from ipge\n");
-	    if(err<0){
+           printf("\nsended syn ack from ipgw\n");
+	   print_data(data->data,data->data_len); 
+	   if(err<0){
                 printf("send_ip_ll to serb error!\n");
             }
         }else if(src_ip == inet_addr(CLIENT_SUBNET_IP_ADDR)){
