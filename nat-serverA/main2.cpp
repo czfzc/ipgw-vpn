@@ -264,6 +264,7 @@ void* recv_thread(void*){
                         memcpy(data->data,temp,data->data_len-14);
                         data->data_len-=14;
                         u_int16_t ip_hdr_len = *(data->data)<<4/4;
+                        printf("ip_hdr_len:%d\n",ip_hdr_len);
                         u_int32_t *data32 = (u_int32_t*)data->data;
                         u_int32_t src_ip = *(data32+3);
                         u_int32_t dest_ip = *(data32+4);
