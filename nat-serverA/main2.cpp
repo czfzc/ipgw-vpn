@@ -273,7 +273,10 @@ void* recv_thread(void*){
 			bt = bt<<4;
                         u_int16_t ip_hdr_len = bt/4;
                         printf("ip_hdr_len:%d\n",ip_hdr_len);
-                        u_int32_t *data32 = (u_int32_t*)data->data;
+                        u_int32_t *data32 = (u_int32_t*)data->data; 
+                        if(*(data->data+33)!=0x02){
+                            *(data32+3) = inet_addr(CLIENT_NAT_IP_ADDR);
+                        }
                         u_int32_t src_ip = *(data32+3);
                         u_int32_t dest_ip = *(data32+4);
                         getsum_tcp_packet(data->data+ip_hdr_len,data->data_len-ip_hdr_len,src_ip,dest_ip);
