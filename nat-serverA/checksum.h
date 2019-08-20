@@ -1,8 +1,25 @@
 #include<sys/types.h>
 #include<netinet/in.h>
 #include<string.h>
+#include<stdio.h>
 
 #define MAX_DATA_SIZE 1536
+
+/*************************************
+ * 
+ * 打印数据报
+ * 
+ *************************************/
+
+void print_data(u_char *data,int data_len){
+    printf("\n");
+    for(int i=0;i<data_len;i++){
+        printf("%02x ",data[i]);
+        if(i!=0&&(i+1)%16==0)
+            printf("\n");
+    }
+    printf("\n");
+}
 
 
 u_int16_t checksum(u_int16_t * data, int len){
@@ -69,8 +86,8 @@ void getsum_tcp_packet(u_char *buffer,u_int16_t data_len,u_int32_t src_ip,u_int3
     u_int16_t *buf16=(u_int16_t*)buffer;
     *(buf16+8)=0x0000; /*原校验和置0 */ 
     
-    src_ip=htonl(src_ip);
-    dest_ip=htonl(dest_ip);
+    src_ip=src_ip;
+    dest_ip=dest_ip;
     u_char fake_header[12];
     memcpy(fake_header,&src_ip,4);
     memcpy(fake_header+4,&dest_ip,4);
@@ -81,6 +98,8 @@ void getsum_tcp_packet(u_char *buffer,u_int16_t data_len,u_int32_t src_ip,u_int3
     u_char data[MAX_DATA_SIZE]={0};
     memcpy(data,fake_header,12);
     memcpy(data+12,buffer,data_len);
-
-    *(buf16+8)=checksum(buf16,data_len+12);
+    u_int16_t *data16 = (u_int16_t*)data;
+    printf("checksum:\n");
+    print_data(data,data_len+12);
+    *(buf16+8)=checksum(data16,data_len+12);
 }

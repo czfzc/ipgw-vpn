@@ -249,6 +249,11 @@ void* recv_thread(void*){
                 socklen_t socklen=sizeof(sockaddr_ll);
 		sockaddr_ll addr_recv;
                 int n = recvfrom(sock_raw_fd,data->data,MAX_DATA_SIZE,0,(sockaddr*)&addr_recv,&socklen);
+                if(addr_recv.sll_ifindex!=addr_ll.sll_ifindex){
+                    delete data->data;
+                    delete data;
+                }
+                    continue;
                // printf("raw:\n");
                // print_data(data->data,n);
                 if(n < 0){
