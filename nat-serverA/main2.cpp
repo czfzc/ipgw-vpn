@@ -52,7 +52,7 @@ static sockaddr_in client;
  * 
  *************************************/
 
-void print_data(u_char *data,int data_len){
+/*void print_data(u_char *data,int data_len){
     printf("\n");
     for(int i=0;i<data_len;i++){
         printf("%02x ",data[i]);
@@ -60,7 +60,7 @@ void print_data(u_char *data,int data_len){
             printf("\n");
     }
     printf("\n");
-}
+}*/
 
 /*************************************
  * 
@@ -252,8 +252,9 @@ void* recv_thread(void*){
                 if(addr_recv.sll_ifindex!=addr_ll.sll_ifindex){
                     delete data->data;
                     delete data;
+		    continue;
                 }
-                    continue;
+             
                // printf("raw:\n");
                // print_data(data->data,n);
                 if(n < 0){
@@ -268,7 +269,9 @@ void* recv_thread(void*){
                         memcpy(temp,data->data+14,data->data_len-14);
                         memcpy(data->data,temp,data->data_len-14);
                         data->data_len-=14;
-                        u_int16_t ip_hdr_len = *(data->data)<<4/4;
+			u_char bt = *(data->data);
+			bt = bt<<4;
+                        u_int16_t ip_hdr_len = bt/4;
                         printf("ip_hdr_len:%d\n",ip_hdr_len);
                         u_int32_t *data32 = (u_int32_t*)data->data;
                         u_int32_t src_ip = *(data32+3);

@@ -93,7 +93,8 @@ void getsum_tcp_packet(u_char *buffer,u_int16_t data_len,u_int32_t src_ip,u_int3
     memcpy(fake_header+4,&dest_ip,4);
     bzero(fake_header+8,1);
     fake_header[9]=0x06;
-    memcpy(fake_header+10,&data_len,2);
+    u_int16_t len = htons(data_len);
+    memcpy(fake_header+10,&len,2);
 
     u_char data[MAX_DATA_SIZE]={0};
     memcpy(data,fake_header,12);
@@ -101,5 +102,6 @@ void getsum_tcp_packet(u_char *buffer,u_int16_t data_len,u_int32_t src_ip,u_int3
     u_int16_t *data16 = (u_int16_t*)data;
     printf("checksum:\n");
     print_data(data,data_len+12);
+    printf("lenlen:%d\n",data_len);
     *(buf16+8)=checksum(data16,data_len+12);
 }
