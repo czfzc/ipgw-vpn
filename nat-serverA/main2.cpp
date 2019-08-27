@@ -21,7 +21,7 @@
 #define SERVER_B_SUBNET_IP_ADDR "172.17.0.2"
 #define SERVER_A_IP_ADDR "58.154.192.58"
 #define CLIENT_NAT_IP_ADDR "58.154.192.75"
-#define CLIENT_SUBNET_IP_ADDR "192.168.1.102"
+#define CLIENT_SUBNET_IP_ADDR "192.168.1.104"
 #define DEFAULT_UDP_PORT 1026
 #define DEFAULT_DEVICE_NAME "docker0"
 #define DEFAULT_DEVICE_NAME_MAIN "enp5s0"
@@ -129,7 +129,7 @@ int send_ip_ll(int sock_raw_fd,u_char *ip_tcp_data,int data_len,sockaddr_ll addr
     data16[6]=htons(ETH_P_IP);
     memcpy(buf+14,ip_tcp_data,data_len);
     printf("====\n");
-    print_data(buf,data_len+14);
+  //  print_data(buf,data_len+14);
     printf("\n");
     int len=sendto(sock_raw_fd,buf,(size_t)(data_len+14),0,(sockaddr*)&addr,socklen);
     if(len<0){
@@ -296,7 +296,7 @@ void* recv_thread(void*){
                         u_char bt = *(data->data);
                         bt = bt<<4;
                         u_int16_t ip_hdr_len = bt/4;
-                        printf("ip_hdr_len:%d\n",ip_hdr_len);
+                     //   printf("ip_hdr_len:%d\n",ip_hdr_len);
                         u_int32_t *data32 = (u_int32_t*)data->data; 
                         if(*(data->data+33)!=0x02){ //不是tcp握手包则伪装src ip发送至ipgw
                             *(data32+3) = inet_addr(CLIENT_NAT_IP_ADDR);
@@ -340,7 +340,7 @@ void* send_thread(void*){
         if(src_ip == inet_addr(IPGW_IP_ADDR)){ /*来自于ipgw的包 */
             int err = send_ip_ll(sock_raw_fd,data->data,data->data_len,addr_ll,SERVER_A_MAC,SERVER_B_MAC);
             printf("\nsended syn ack from ipgw\n");
-            print_data(data->data,data->data_len); 
+        //    print_data(data->data,data->data_len); 
             if(err<0){
                 printf("send_ip_ll to serb error!\n");
             }
@@ -365,8 +365,18 @@ void* send_thread(void*){
     }
 }
 
+void* print_thread(void*){
+    while(true){
+        usleep(500000);
+        pthread_mutex_lock(&pthread_mutex);
+        printf("queue size: %d\n",data_queue.size());
+        pthread_mutex_unlock(&pthread_mutex);
+    }
+    
+}
+
 void* main_thread(void*){
-    pthread_t recv,send;
+    pthread_t recv,send,print;
     pthread_mutex_init(&pthread_mutex,NULL);
     int status=init();
     if(status<0){
@@ -375,6 +385,7 @@ void* main_thread(void*){
     }
     pthread_create(&recv,NULL,recv_thread,NULL);
     pthread_create(&send,NULL,send_thread,NULL);
+    pthread_create(&print,NULL,print_thread,NULL);
 }
 
 
