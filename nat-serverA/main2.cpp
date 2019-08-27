@@ -328,7 +328,6 @@ void* send_thread(void*){
         pthread_mutex_lock(&pthread_mutex);
         if(data_queue.size()==0){
             pthread_mutex_unlock(&pthread_mutex);
-            usleep(100000);
             continue;
         }
         packet *data=data_queue.front();
