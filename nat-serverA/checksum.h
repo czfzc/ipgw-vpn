@@ -59,20 +59,15 @@ long sum = 0;
  * 
  *************************************/
 
-void getsum_ip_packet(unsigned char *_buffer)
+void getsum_ip_packet(unsigned char *buffer)
 {
-    u_int16_t *ope_16=(u_int16_t *)_buffer;
-    u_int32_t temp=0;
-    for (int ptr=0;ptr<10;ptr++)
-    {
-        u_int16_t temp16=*(ope_16+ptr);
-        temp+=((u_int32_t)htons(temp16)) & 0x0000FFFF;
-    }
-    u_int32_t temp_CF=temp>>0x10;
-    temp&=0x0000FFFF;
-    temp+=temp_CF;
-    temp=(u_int32_t)htons((u_int16_t)((~temp)&0x0000FFFF));
-    *(ope_16+5)=(u_int16_t)temp;    
+    u_char bt = *(buffer);
+    bt = bt<<4;
+    u_int16_t ip_hdr_len = bt/4;
+    u_int16_t *data16 = (u_int16_t*)buffer;
+    *(data16+5)=0;
+    u_int16_t sum = checksum(data16,ip_hdr_len);  
+    *(data16+5)=sum;
 }
 
 /*************************************
