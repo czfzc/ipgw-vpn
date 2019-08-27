@@ -16,20 +16,20 @@
 
 #define IPGW_IP_ADDR "202.118.1.87"
 #define IPGW_DEFAULT_PORT 80
-#define SERVER_A_SUBNET_IP_ADDR "172.17.0.2"
-#define SERVER_B_SUBNET_IP_ADDR "172.17.0.3"
+#define SERVER_A_SUBNET_IP_ADDR "172.17.0.3"
+#define SERVER_B_SUBNET_IP_ADDR "172.17.0.2"
 #define SERVER_A_IP_ADDR "58.154.192.58"
 #define CLIENT_NAT_IP_ADDR "58.154.192.75"
 #define CLIENT_SUBNET_IP_ADDR "192.168.1.102"
 #define DEFAULT_UDP_PORT 1026
-#define DEFAULT_DEVICE_NAME "eth0"
 #define MAX_BUFFER_QUEUE_SIZE 5000
 #define MAX_DATA_SIZE 1536
 
 using namespace std;
 
-u_char SERVER_A_MAC[6]={0x02,0x42,0xac,0x11,0x00,0x02};
-u_char SERVER_B_MAC[6]={0x02,0x42,0xac,0x11,0x00,0x03};
+u_char SERVER_A_MAC[6]={0x02,0x42,0x51,0xda,0x83,0x3b};
+u_char SERVER_B_MAC[6]={0x02,0x42,0xac,0x11,0x00,0x02};
+u_char SERVER_A_MAC_MAIN[6]={0x00,0xf1,0xf3,0x17,0xac,0xc5};
 u_char GATEWAY_MAC[6]={0x38,0x97,0xd6,0x51,0xa0,0xa2};
 
 typedef struct{
@@ -141,6 +141,7 @@ void* recv_thread(void*){
                 int n = recv(sock_udp_fd,data->data,MAX_DATA_SIZE,0);
                 if(n < 0){
                     printf("udp recv() error");
+                    delete data->data;
                     delete data;
                 }else{
                     data->data_len = n;

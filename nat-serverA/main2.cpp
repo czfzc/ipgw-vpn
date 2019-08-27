@@ -21,7 +21,7 @@
 #define SERVER_B_SUBNET_IP_ADDR "172.17.0.2"
 #define SERVER_A_IP_ADDR "58.154.192.58"
 #define CLIENT_NAT_IP_ADDR "58.154.192.75"
-#define CLIENT_SUBNET_IP_ADDR "192.168.1.104"
+#define CLIENT_SUBNET_IP_ADDR "192.168.1.102"
 #define DEFAULT_UDP_PORT 1026
 #define DEFAULT_DEVICE_NAME "docker0"
 #define DEFAULT_DEVICE_NAME_MAIN "enp5s0"
@@ -236,11 +236,34 @@ void* recv_thread(void*){
                     printf("udp recv() error\n");
                     delete data->data;
                     delete data;
+                    continue;
                 }else{
-                    printf("udp receved");
-                    pthread_mutex_lock(&pthread_mutex);
-                    data_queue.push(data);
-                    pthread_mutex_unlock(&pthread_mutex);
+                    if(*(data->data+9)==0x06){
+                        printf("udp receved\n");
+                        /*修改目的ip 并且重新计算校验和*/
+                        u_int32_t *data32 = (u_int32_t*)data->data;
+                        if(*(data32+4)==inet_addr(CLIENT_SUBNET_IP_ADDR)){
+                            *(data32+4)=inet_addr(SERVER_B_SUBNET_IP_ADDR);
+                        }
+
+                        u_char bt = *(data->data);
+                        bt = bt<<4;
+                        u_int16_t ip_hdr_len = bt/4;
+                            
+                        u_int32_t src_ip = *(data32+3);
+                        u_int32_t dest_ip = *(data32+4);
+                        getsum_ip_packet(data->data);
+                        getsum_tcp_packet(data->data+ip_hdr_len,data->data_len-ip_hdr_len,src_ip,dest_ip);
+
+                        pthread_mutex_lock(&pthread_mutex);
+                        data_queue.push(data);
+                        pthread_mutex_unlock(&pthread_mutex);
+                    }else{
+                        printf("udp unreceved\n");
+                        delete data->data;
+                        delete data;
+                        continue;
+                    }
                 }  
             }
             if(FD_ISSET(sock_raw_fd,&read_set)){ /*sock raw有数据 */
