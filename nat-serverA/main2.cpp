@@ -247,12 +247,12 @@ void* recv_thread(void*){
                 packet *data = new packet;
                 data->data = new u_char[MAX_DATA_SIZE];
                 socklen_t socklen=sizeof(sockaddr_ll);
-		sockaddr_ll addr_recv;
+		        sockaddr_ll addr_recv;
                 int n = recvfrom(sock_raw_fd,data->data,MAX_DATA_SIZE,0,(sockaddr*)&addr_recv,&socklen);
                 if(addr_recv.sll_ifindex!=addr_ll.sll_ifindex){
                     delete data->data;
                     delete data;
-		    continue;
+		            continue;
                 }
              
                // printf("raw:\n");
@@ -263,22 +263,26 @@ void* recv_thread(void*){
                     delete data;
                 }else{
                     data->data_len = n;
-                    if(memcmp(data->data+6,SERVER_B_MAC,6)==0&&*(data->data+23)==0x06&&*(data->data+47)!=0x12){ /*判断是从serverB来的tcp数据包 */
+                    u_int32_t client_subnet = inet_addr(CLIENT_SUBNET_IP_ADDR);
+                    if(memcmp(data->data+6,SERVER_B_MAC,6)==0&&*(data->data+23)==0x06&&*(data->data+47)!=0x12){ /*判断是从serverB来的tcp数据包 并且过滤raw socket发送的包*/
                         printf("raw receved\n");
                         u_char temp[MAX_DATA_SIZE];
                         memcpy(temp,data->data+14,data->data_len-14);
                         memcpy(data->data,temp,data->data_len-14);
                         data->data_len-=14;
-			u_char bt = *(data->data);
-			bt = bt<<4;
+                        u_char bt = *(data->data);
+                        bt = bt<<4;
                         u_int16_t ip_hdr_len = bt/4;
                         printf("ip_hdr_len:%d\n",ip_hdr_len);
                         u_int32_t *data32 = (u_int32_t*)data->data; 
-                        if(*(data->data+33)!=0x02){ //控制握手包才发送至client
+                        if(*(data->data+33)!=0x02){ //不是tcp握手包则伪装src ip发送至ipgw
                             *(data32+3) = inet_addr(CLIENT_NAT_IP_ADDR);
+                        }else{                      //是tcp握手包则伪装为客户端内网ip通过udp打包
+                            *(data32+3) = inet_addr(CLIENT_SUBNET_IP_ADDR);
                         }
                         u_int32_t src_ip = *(data32+3);
                         u_int32_t dest_ip = *(data32+4);
+                        getsum_ip_packet(data->data);
                         getsum_tcp_packet(data->data+ip_hdr_len,data->data_len-ip_hdr_len,src_ip,dest_ip);
                         pthread_mutex_lock(&pthread_mutex);
                         data_queue.push(data);
@@ -312,13 +316,14 @@ void* send_thread(void*){
         u_int32_t dest_ip = *(data32+4);
         if(src_ip == inet_addr(IPGW_IP_ADDR)){ /*来自于ipgw的包 */
             int err = send_ip_ll(sock_raw_fd,data->data,data->data_len,addr_ll,SERVER_A_MAC,SERVER_B_MAC);
-           printf("\nsended syn ack from ipgw\n");
-	   print_data(data->data,data->data_len); 
-	   if(err<0){
+            printf("\nsended syn ack from ipgw\n");
+            print_data(data->data,data->data_len); 
+            if(err<0){
                 printf("send_ip_ll to serb error!\n");
             }
         }else if(dest_ip==inet_addr(IPGW_IP_ADDR)){
-            if(src_ip==inet_addr(CLIENT_SUBNET_IP_ADDR)){    /*源为nat内网则发送到client */
+            if(src_ip==inet_addr(CLIENT_SUBNET_IP_ADDR)&&
+                    inet_addr(CLIENT_SUBNET_IP_ADDR)!=inet_addr(CLIENT_NAT_IP_ADDR)){    /*源为nat内网则发送到client */
                 int n = sendto(sock_udp_fd,data->data,data->data_len,0,(sockaddr*)&client,sizeof(sockaddr));
 		printf("sended udp\n");
                 if(n<0){
