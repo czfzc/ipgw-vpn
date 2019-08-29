@@ -1,29 +1,14 @@
+#ifndef _HCHECKSUM_H_
+#define _HCHECKSUM_H_
+
 #include<sys/types.h>
 #include<netinet/in.h>
 #include<string.h>
 #include<stdio.h>
-
-#define MAX_DATA_SIZE 1536
-
-/*************************************
- * 
- * 打印数据报
- * 
- *************************************/
-
-void print_data(u_char *data,int data_len){
-    printf("\n");
-    for(int i=0;i<data_len;i++){
-        printf("%02x ",data[i]);
-        if(i!=0&&(i+1)%16==0)
-            printf("\n");
-    }
-    printf("\n");
-}
-
+#include"nettools.h"
 
 u_int16_t checksum(u_int16_t * data, int len){
-long sum = 0;
+    long sum = 0;
 /*
 计算所有数据的16bit对之和
 */
@@ -100,3 +85,5 @@ void getsum_tcp_packet(u_char *buffer,u_int16_t data_len,u_int32_t src_ip,u_int3
     printf("lenlen:%d\n",data_len);
     *(buf16+8)=checksum(data16,data_len+12);
 }
+
+#endif

@@ -11,148 +11,29 @@
 #include<linux/if_packet.h>
 #include<pthread.h>
 #include<cerrno>
-#include"checksum.h"
-
 #include<queue>
+#include"ipgw.h"
+#include"cacheuser.h"
+#include"arp.h"
 
-#define IPGW_IP_ADDR "202.118.1.87"
-#define IPGW_DEFAULT_PORT 80
-#define SERVER_A_SUBNET_IP_ADDR "172.17.0.3"
-#define SERVER_B_SUBNET_IP_ADDR "172.17.0.2"
-#define SERVER_A_IP_ADDR "58.154.192.58"
-#define CLIENT_NAT_IP_ADDR "58.154.192.75"
-#define CLIENT_SUBNET_IP_ADDR "192.168.1.104"
-#define DEFAULT_UDP_PORT 1026
-#define DEFAULT_DEVICE_NAME "docker0"
-#define DEFAULT_DEVICE_NAME_MAIN "enp5s0"
-#define MAX_BUFFER_QUEUE_SIZE 5000
-#define MAX_DATA_SIZE 1536
-
-using namespace std;
-
-u_char SERVER_A_MAC[6]={0x02,0x42,0x51,0xda,0x83,0x3b};
-u_char SERVER_B_MAC[6]={0x02,0x42,0xac,0x11,0x00,0x02};
-u_char SERVER_A_MAC_MAIN[6]={0x00,0xf1,0xf3,0x17,0xac,0xc5};
-u_char GATEWAY_MAC[6]={0x38,0x97,0xd6,0x51,0xa0,0xa2};
-
-typedef struct{
-    uint32_t data_len;
-    u_char *data;
-}packet;
+#define SERVER_DOMAIN "s.ipgw.top"
+/* 
+class NatHandler{
+    private:
+        cacheuser cache;
+    public:
+        NatHandler();
+        int init();
+};*/
 
 pthread_mutex_t pthread_mutex;
 static int sock_udp_fd,sock_raw_fd;
 static queue<packet*> data_queue;
 static sockaddr_ll addr_ll,addr_ll_main;
-static sockaddr_in client;
+/*static sockaddr_in client;*/
+cacheuser cache;
 
-/*************************************
- * 
- * 打印数据报
- * 
- *************************************/
 
-/*void print_data(u_char *data,int data_len){
-    printf("\n");
-    for(int i=0;i<data_len;i++){
-        printf("%02x ",data[i]);
-        if(i!=0&&(i+1)%16==0)
-            printf("\n");
-    }
-    printf("\n");
-}*/
-
-/*************************************
- * 
- * 接收udp并且解包成ip包
- * 
- *************************************/
-
-int recv_udp_unpack_to_ip(int sock_dgram_fd,u_char *ip_tcp_data,u_int32_t *data_len){
-    int ret = 0;
-    if(ip_tcp_data == NULL){
-        ret = -1;
-        return ret;
-    }
-    struct sockaddr_in client;
-    socklen_t server_len=sizeof(struct sockaddr_in);
-    int len = recvfrom(sock_dgram_fd,ip_tcp_data,MAX_DATA_SIZE,0,(struct sockaddr*)&client,&server_len);
-    if(len<0){
-        printf("recvfrom error\n");
-        ret = -1;
-        return ret;
-    }
-    printf("len %d\n",len);
-    *data_len = len;
-    return ret;
-}
-
-/*************************************
- * 
- * 根据网卡设备名获取网卡序列号
- * 
- *************************************/
-
-int get_nic_index(int fd,const char* nic_name)
-{
-    struct ifreq ifr;
-    if (nic_name== NULL)
-        return -1;
-    memset(&ifr, 0,sizeof(ifr));
-    strncpy(ifr.ifr_name, nic_name, IFNAMSIZ);
-    if (ioctl(fd,SIOCGIFINDEX,&ifr) == -1){
-        printf("SIOCGIFINDEX ioctl error");
-        return -1;
-    }
-    return ifr.ifr_ifindex;
-}
-
-/*************************************
- * 
- * 将IP报文包裹以太网帧头部并发送链路层数据报(链路层raw socket)
- * 
- *************************************/
-
-int send_ip_ll(int sock_raw_fd,u_char *ip_tcp_data,int data_len,sockaddr_ll addr,
-                        u_char *src_mac,u_char *dest_mac){
-    int ret = 0;
-    if(ip_tcp_data == NULL){
-        ret = -1;
-	    printf("null data\n");
-        return ret;
-    }
-    socklen_t socklen=sizeof(sockaddr_ll);
-    u_char buf[MAX_DATA_SIZE]={0};
-    memcpy(buf,dest_mac,6);
-    memcpy(buf+6,src_mac,6);
-    u_int16_t *data16 = (u_int16_t*)buf;
-    data16[6]=htons(ETH_P_IP);
-    memcpy(buf+14,ip_tcp_data,data_len);
-    printf("====\n");
-  //  print_data(buf,data_len+14);
-    printf("\n");
-    int len=sendto(sock_raw_fd,buf,(size_t)(data_len+14),0,(sockaddr*)&addr,socklen);
-    if(len<0){
-	printf("error sendto,errno:%d\n",errno);
-        ret = -1;
-        return ret;
-    }
-    return ret;
-}
-
-/*************************************
- * 
- * 获取默认发送sockaddr_ll
- * 
- *************************************/
-
-void get_default_sockaddr_ll_send(int fd,sockaddr_ll *addr_ll,char *nic_name)
-{
-    memset(addr_ll,0,sizeof(addr_ll));
-    addr_ll->sll_ifindex=get_nic_index(fd,nic_name);
-    addr_ll->sll_family=PF_PACKET;
-    addr_ll->sll_halen=ETH_ALEN;
-}
 
 /*************************************
  * 
@@ -171,11 +52,11 @@ int init(){
         perror("udp socket open error");
         return -1;
     }
-     
-    client.sin_family = AF_INET;
+    
+    /*client.sin_family = AF_INET;
     client.sin_addr.s_addr = inet_addr(CLIENT_NAT_IP_ADDR);
     client.sin_port = htons(DEFAULT_UDP_PORT);
-    /* int n =  connect(sock_udp_fd,(sockaddr*)&client,sizeof(sockaddr));
+     int n =  connect(sock_udp_fd,(sockaddr*)&client,sizeof(sockaddr));
     */
     sockaddr_in serA;
     serA.sin_family = AF_INET;
@@ -228,7 +109,8 @@ void* recv_thread(void*){
                 packet *data = new packet;
                 data->data = new u_char[MAX_DATA_SIZE];
             //    int n = recv(sock_udp_fd,data->data,MAX_DATA_SIZE,0);
-                int n = recv_udp_unpack_to_ip(sock_udp_fd,data->data,&(data->data_len));
+                sockaddr_in from_client;
+                int n = recv_udp_unpack_to_ip(sock_udp_fd,data->data,&(data->data_len),&from_client);
                 printf("datalen: %d\n",data->data_len);
 		printf("udp:\n");
              //   print_data(data->data,data->data_len);
@@ -242,9 +124,31 @@ void* recv_thread(void*){
                         printf("udp receved\n");
                         /*修改目的ip 并且重新计算校验和*/
                         u_int32_t *data32 = (u_int32_t*)data->data;
+
+                        /* 
                         if(*(data32+4)==inet_addr(CLIENT_SUBNET_IP_ADDR)){
                             *(data32+4)=inet_addr(SERVER_B_SUBNET_IP_ADDR);
+                        }*/
+                        /*根据缓存转换IP数据包的目标ip从client内网ip变为serverB的ip */
+                        u_int32_t c_subnet_ip = *(data32+4);
+                        u_int32_t c_ip = from_client.sin_addr.s_addr;
+                        u_int16_t c_udp_port = from_client.sin_port;
+                        u_int64_t udp_src_ip_and_subnet_ip;
+                        memcpy(&udp_src_ip_and_subnet_ip,&c_ip,4);
+                        memcpy(&udp_src_ip_and_subnet_ip+4,&c_subnet_ip,4);
+                        u_char sb_ip_and_session[20] ;
+                        u_char session[16];
+                        u_int32_t sb_ip;
+                        int status = cache.find_sb_by_client(udp_src_ip_and_subnet_ip,sb_ip_and_session);
+                        if(status == -1){
+                            printf("ip client to server b transform fail!");
+                            continue;
+                        }else{
+                            memcpy(&sb_ip,sb_ip_and_session,4);
+                            memcpy(session,sb_ip_and_session+4,16);
+                            *(data32+4)=sb_ip;
                         }
+                        /*转换结束 */
 
                         u_char bt = *(data->data);
                         bt = bt<<4;
@@ -259,10 +163,24 @@ void* recv_thread(void*){
                         data_queue.push(data);
                         pthread_mutex_unlock(&pthread_mutex);
                     }else{
-                        printf("udp unreceved\n");
-                        delete data->data;
-                        delete data;
-                        continue;
+                        u_char version= *(data->data);
+                        version >>= 4;
+                        if(version&0x0f == 4){  /*如果是ip封包的udp但非tcp封包 */
+                            printf("udp unreceved\n");
+                            delete data->data;
+                            delete data;
+                            continue;
+                        }else{          /*否则这是client向serverA发送的联网握手包 开启线程进行验证 */
+                            u_int16_t len = 0;
+                            memcpy(&len,data->data,2);
+                            u_char* user_name = new u_char[len];
+                            memcpy(user_name,data->data+2,len);
+                            printf("hello from %s",user_name);
+                            void* args[]={&from_client,&len,&user_name};
+                            pthread_t indetify;
+                            pthread_create(&indetify,NULL,indetify_thread,args);
+                        }
+                        
                     }
                 }  
             }
@@ -287,7 +205,7 @@ void* recv_thread(void*){
                 }else{
                     data->data_len = n;
                     u_int32_t client_subnet = inet_addr(CLIENT_SUBNET_IP_ADDR);
-                    if(memcmp(data->data+6,SERVER_B_MAC,6)==0&&*(data->data+23)==0x06&&*(data->data+47)!=0x12){ /*判断是从serverB来的tcp数据包 并且过滤raw socket发送的包*/
+                    if(memcmp(data->data+6,SERVER_B_MAC_SUBNET,6)==0&&*(data->data+23)==0x06&&*(data->data+47)!=0x12){ /*判断是从serverB来的tcp数据包 并且过滤raw socket发送的包*/
                         printf("raw receved\n");
                         u_char temp[MAX_DATA_SIZE];
                         memcpy(temp,data->data+14,data->data_len-14);
@@ -298,11 +216,44 @@ void* recv_thread(void*){
                         u_int16_t ip_hdr_len = bt/4;
                      //   printf("ip_hdr_len:%d\n",ip_hdr_len);
                         u_int32_t *data32 = (u_int32_t*)data->data; 
+
+                        /*
                         if(*(data->data+33)!=0x02){ //不是tcp握手包则伪装src ip发送至ipgw
                             *(data32+3) = inet_addr(CLIENT_NAT_IP_ADDR);
                         }else{                      //是tcp握手包则伪装为客户端内网ip通过udp打包
                             *(data32+3) = inet_addr(CLIENT_SUBNET_IP_ADDR);
                         }
+                        */
+                       /*此处开始源地址转换 */
+                       if(*(data->data+33)!=0x02){ //不是tcp握手包则伪装src ip发送至ipgw
+                            u_int32_t sb_ip = *(data32+3);
+                            u_char client_udp_src_ip_and_port_and_subnet_ip_and_session[26];
+                            cache.find_client_by_sb(sb_ip,client_udp_src_ip_and_port_and_subnet_ip_and_session);
+                            u_char session[16];
+                            memcpy(session,client_udp_src_ip_and_port_and_subnet_ip_and_session+10,16);
+                            u_int32_t c_src_ip = 0;
+                            memcpy(&c_src_ip,client_udp_src_ip_and_port_and_subnet_ip_and_session,4);
+                            *(data32+3) = c_src_ip;
+                        }else{                      //是tcp握手包则伪装为客户端内网ip通过udp打包
+                            u_int32_t sb_ip = *(data32+3);
+                            u_char client_udp_src_ip_and_port_and_subnet_ip_and_session[26];
+                            cache.find_client_by_sb(sb_ip,client_udp_src_ip_and_port_and_subnet_ip_and_session);
+                            u_char session[16];
+                            memcpy(session,client_udp_src_ip_and_port_and_subnet_ip_and_session+10,16);
+                            u_int32_t c_subnet_ip = 0;
+                            memcpy(&c_subnet_ip,client_udp_src_ip_and_port_and_subnet_ip_and_session+6,4);
+                            *(data32+3) = c_subnet_ip;
+                            memcpy(data->session_key,session,16);   //拷贝加密session到数据包结构体
+                            sockaddr_in target_client;
+                            memcpy(&target_client.sin_port,
+                                client_udp_src_ip_and_port_and_subnet_ip_and_session+4,2);
+                            memcpy(&target_client.sin_addr,
+                                client_udp_src_ip_and_port_and_subnet_ip_and_session,4);
+                            target_client.sin_family = AF_INET;
+                            bzero(&target_client.sin_zero,8);
+                            memcpy(&(data->target),&target_client,sizeof(struct sockaddr_in));//拷贝udp目的地址到数据包结构体
+                        }
+                        /*转换结束 */
                         u_int32_t src_ip = *(data32+3);
                         u_int32_t dest_ip = *(data32+4);
                         getsum_ip_packet(data->data);
@@ -337,7 +288,7 @@ void* send_thread(void*){
         u_int32_t src_ip = *(data32+3);
         u_int32_t dest_ip = *(data32+4);
         if(src_ip == inet_addr(IPGW_IP_ADDR)){ /*来自于ipgw的包 */
-            int err = send_ip_ll(sock_raw_fd,data->data,data->data_len,addr_ll,SERVER_A_MAC,SERVER_B_MAC);
+            int err = send_ip_ll(sock_raw_fd,data->data,data->data_len,addr_ll,SERVER_A_MAC_SUBNET,SERVER_B_MAC_SUBNET);
             printf("\nsended syn ack from ipgw\n");
         //    print_data(data->data,data->data_len); 
             if(err<0){
@@ -346,14 +297,15 @@ void* send_thread(void*){
         }else if(dest_ip==inet_addr(IPGW_IP_ADDR)){
             if(src_ip==inet_addr(CLIENT_SUBNET_IP_ADDR)&&
                     inet_addr(CLIENT_SUBNET_IP_ADDR)!=inet_addr(CLIENT_NAT_IP_ADDR)){    /*源为nat内网则发送到client */
-                int n = sendto(sock_udp_fd,data->data,data->data_len,0,(sockaddr*)&client,sizeof(sockaddr));
+                u_char* session_key = data->session_key; //需要作为对称加密秘钥的session
+                int n = sendto(sock_udp_fd,data->data,data->data_len,0,(sockaddr*)&(data->target),sizeof(sockaddr));
 		printf("sended udp\n");
                 if(n<0){
                     perror("send tcp dgram error");
                 }
             }else if(src_ip==inet_addr(CLIENT_NAT_IP_ADDR)){          /*否则发到网关 让网关处理 也就是伪装ip直接发送ipgw */
                 printf("\nhhahasb\n");
-		    int err = send_ip_ll(sock_raw_fd,data->data,data->data_len,addr_ll_main,SERVER_A_MAC_MAIN,GATEWAY_MAC);
+		    int err = send_ip_ll(sock_raw_fd,data->data,data->data_len,addr_ll_main,SERVER_A_MAC_OUT,GATEWAY_MAC);
 		if(err<0){
                     printf("send_ip_ll to ipgw error!\n");
                 }
@@ -371,7 +323,79 @@ void* print_thread(void*){
         printf("queue size: %d\n",data_queue.size());
         pthread_mutex_unlock(&pthread_mutex);
     }
-    
+}
+
+void* indetify_thread(void* args){
+    sockaddr_in* from_client = (sockaddr_in*)((void**)args)[0];
+    u_int16_t* user_name_len = (u_int16_t*)((void**)args)[1];
+    u_char** user_name = (u_char**)((void**)args)[2];
+    u_char error_mes[256];
+    u_char session_key[16];
+    u_int32_t c_subnet_ip = 0;
+    u_int16_t error_mes_len;
+    int status = indetify_user_by_user_name_and_src_ip(*user_name,*user_name_len,from_client->sin_addr.s_addr,
+            error_mes,&error_mes_len,session_key,&c_subnet_ip);
+    if(status==-1){     /*验证不通过 直接向client返回 */
+        u_char data[error_mes_len+2];
+        memcpy(data,&error_mes_len,2);
+        memcpy(data+2,error_mes,error_mes_len);
+        int n = sendto(sock_udp_fd,data,error_mes_len+2,0,(sockaddr*)from_client,sizeof(sockaddr));
+        if(n!=-1){
+            return;
+        }else{
+            printf("send udp to client to return error fail");
+        }
+    }else{              /*验证通过 开始分配空余主机做serverB并且给serverB下达联网指令 */
+        /*获取本机ip */
+       // u_int32_t this_serverA_ip;
+       // get_eth_IP(DEFAULT_DEVICE_NAME_MAIN,(u_char*)&this_serverA_ip);
+        cache.bind(from_client->sin_port,from_client->sin_addr.s_addr,c_subnet_ip,session_key);
+    }
+}
+
+/*-1代表验证失败 0代表验证成功 */
+int indetify_user_by_user_name_and_src_ip(u_char* user_name,u_int16_t user_name_len,
+        u_int32_t client_src_ip,u_char* error_mes,u_int16_t *error_mes_len,u_char* session_key,
+        u_int32_t* client_subnet_ip){
+    u_int32_t server_ip;
+    socket_resolver(SERVER_DOMAIN,&server_ip);
+
+    int sockfd;
+    u_char buf[MAX_DATA_SIZE];
+    struct sockaddr_in server;
+    while((sockfd = socket (AF_INET,SOCK_STREAM,0))==-1);
+    server.sin_family = AF_INET;
+    server.sin_port = htons(DEFAULT_SERVER_PORT);
+    server.sin_addr.s_addr = server_ip;
+    bzero(&(server.sin_zero),8);
+
+    while(connect(sockfd,(struct sockaddr*)&server,sizeof(struct sockaddr))==-1);
+    struct in_addr a_server_ip;
+    memcpy(&a_server_ip,&server_ip,4);
+    printf("connected to %s\n",inet_ntoa(a_server_ip));
+
+    u_char data[user_name_len+8];
+    int datalen = user_name_len+8;
+    u_int16_t src_ip_len=4;
+    memcpy(data,&user_name_len,2);
+    memcpy(data+2,user_name,user_name_len);
+    memcpy(data+2+user_name_len,&src_ip_len,2);
+    memcpy(data+4+user_name_len,&client_src_ip,4);
+    send(sockfd,data,datalen,0);
+    recv(sockfd,buf,MAX_DATA_SIZE,0);
+    if(buf[0] == 0){
+        u_int16_t error_len = 0;
+        memcpy(&error_len,buf+1,2);
+        memcpy(error_mes,buf+3,error_len);
+        *error_mes_len = error_len;
+        printf("server error!");
+        return -1;
+    }else{
+        memcpy(session_key,buf,16);
+        memcpy(client_subnet_ip,buf+16,4);
+        return 0;
+    }
+    close(sockfd);
 }
 
 void* main_thread(void*){
@@ -385,18 +409,4 @@ void* main_thread(void*){
     pthread_create(&recv,NULL,recv_thread,NULL);
     pthread_create(&send,NULL,send_thread,NULL);
     pthread_create(&print,NULL,print_thread,NULL);
-}
-
-
-int main(){
-    pthread_t main;
-    int err = pthread_create(&main,NULL,main_thread,NULL);
-    if(err != 0){
-        perror("fail to create thread");
-        return -1;
-    }
-    pthread_join(main,NULL);
-    while(1){
-        sleep(1000000);
-    }
 }
