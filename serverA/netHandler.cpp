@@ -15,8 +15,6 @@
 #include"ipgw.h"
 #include"cacheuser.h"
 #include"arp.h"
-
-#define SERVER_DOMAIN "s.ipgw.top"
 /* 
 class NatHandler{
     private:

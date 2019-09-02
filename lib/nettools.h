@@ -13,7 +13,9 @@
 #include<sys/socket.h>
 #include<string.h>
 #include<cerrno>
+#include<netdb.h>
 #include"checksum.h"
+#include"md5.h"
 
 /*************************************
  * 
@@ -28,7 +30,7 @@ int recv_udp_unpack_to_ip(int sock_dgram_fd,u_char *ip_tcp_data,u_int32_t *data_
         return ret;
     }
     socklen_t server_len=sizeof(struct sockaddr_in);
-    int len = recvfrom(sock_dgram_fd,ip_tcp_data,MAX_DATA_SIZE,0,(struct sockaddr*)feom_client,&server_len);
+    int len = recvfrom(sock_dgram_fd,ip_tcp_data,MAX_DATA_SIZE,0,(struct sockaddr*)from_client,&server_len);
     if(len<0){
         printf("recvfrom error\n");
         ret = -1;
@@ -112,7 +114,7 @@ void get_default_sockaddr_ll_send(int fd,sockaddr_ll *addr_ll,char *nic_name)
  * 
  *************************************/
 
-void print_data(u_char *data,int data_len){
+void print_data(const u_char *data,const int data_len){
     printf("\n");
     for(int i=0;i<data_len;i++){
         printf("%02x ",data[i]);
@@ -120,10 +122,6 @@ void print_data(u_char *data,int data_len){
             printf("\n");
     }
     printf("\n");
-}
-
-void get_hw_addr_by_ip(u_char* ip,u_char* mac){
-    memcpy(mac,SERVER_B_SUBNET_IP_ADDR,6);
 }
 
 /*根据域名获取ip */
@@ -142,6 +140,24 @@ int socket_resolver(const char *domain, u_int32_t *ipaddr)
     }else return -1;
 
     return 0;
+}
+
+/***********************
+ * 
+ * 计算16bit md5
+ * 
+ ***********************/
+int md5_16(u_char* result,const u_char* content,int content_len){
+    if(result==NULL||content==NULL){
+        printf("error to printf md5!\n");
+        return -1;
+    }
+    md5_state_t state;
+	md5_byte_t digest[16];
+	md5_init(&state);
+	md5_append(&state, (const md5_byte_t *)content, content_len);
+	md5_finish(&state, digest);
+    memcpy(result,&digest,16);
 }
 
 #endif

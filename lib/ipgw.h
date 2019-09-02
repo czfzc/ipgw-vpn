@@ -24,6 +24,7 @@
 #define DEFAULT_DEVICE_NAME "docker0"
 #define DEFAULT_DEVICE_NAME_MAIN "enp5s0"
 #define MAX_BUFFER_QUEUE_SIZE 5000
+#define SERVER_DOMAIN "s.ipgw.top"
 
 
 typedef struct{
@@ -32,10 +33,10 @@ typedef struct{
     sockaddr target;
     u_char session_key[16];
 }packet;
-
+/*现在通过ip层发送 系统通过arp自动获取网卡地址
 static u_char SERVER_A_MAC_SUBNET[6]={0x02,0x42,0x51,0xda,0x83,0x3b};
 static u_char SERVER_B_MAC_SUBNET[6]={0x02,0x42,0xac,0x11,0x00,0x02};
 static u_char SERVER_A_MAC_OUT[6]={0x00,0xf1,0xf3,0x17,0xac,0xc5};
 static u_char GATEWAY_MAC[6]={0x38,0x97,0xd6,0x51,0xa0,0xa2};
-
+*/
 #endif
