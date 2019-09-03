@@ -7,6 +7,8 @@
 #include"../lib/ipgw.h"
 
 #define SUBNET_IP "192.168.1.102"
+#undef SERVER_DOMAIN
+#define SERVER_DOMAIN "localhost"
 
 #pragma pack(1)
 
@@ -84,18 +86,18 @@ int set_dgram_from_content(u_char* dgram,u_int16_t* dgram_data_len,const u_char 
 }*/
 
 int request_data(int sock_fd,const struct dgram_data* send_data,struct dgram_data* recv_data){
-    if(write(sock_fd,send_data,recv_data->data_len+3)==-1){
+    if(write(sock_fd,send_data,send_data->data_len+3)==-1){
         printf("send error!\n");
         return -1;
     }
     printf("sended:\n");
-    return print_dgram_data(send_data);
+    print_dgram_data(send_data);
     if(read(sock_fd,recv_data,MAX_DATA_SIZE+3)==-1){
         printf("recv error!\n");
         return -1;
     }
     printf("received:\n");
-    return print_dgram_data(recv_data);
+    print_dgram_data(recv_data);
 }
 
 /*登录步骤 */
@@ -151,13 +153,13 @@ void *main_thread(void*){
     u_char session_key[16];
     if(init()<0)
         return NULL;
-    if(step_request_to_login(session_key,user_name,user_name_len,password,password_len)<0)
+     if(step_request_to_login(session_key,user_name,user_name_len,password,password_len)<0)
         return NULL;
-  /*   if(step_connect_to_ipgw(session_key,&subnet_ip,0)<0)
-        return;
+     if(step_connect_to_ipgw(session_key,&subnet_ip,&sa_ip)<0)
+        return NULL;
     in_addr sa;
     sa.s_addr = sa_ip;
-    printf("server A ip is %s\n",inet_ntoa(sa));*/
+    printf("server A ip is %s\n",inet_ntoa(sa));
 }
 
 int main(){

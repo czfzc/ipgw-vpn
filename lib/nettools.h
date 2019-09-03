@@ -15,7 +15,7 @@
 #include<cerrno>
 #include<netdb.h>
 #include"checksum.h"
-#include"md5.h"
+#include"md5.c"
 
 /*************************************
  * 

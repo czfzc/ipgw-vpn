@@ -12,9 +12,11 @@
 #include<pthread.h>
 #include<cerrno>
 #include<queue>
-#include"ipgw.h"
-#include"cacheuser.h"
-#include"arp.h"
+#include"../lib/ipgw.h"
+#include"../lib/cacheuser.h"
+#include"../lib/arp.h"
+
+#define SERVER_DOMAIN "s.ipgw.top"
 /* 
 class NatHandler{
     private:

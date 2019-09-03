@@ -4,8 +4,8 @@
 #include<pthread.h>
 #include<cerrno>
 #include<queue>
-#include"nettools.h"
-#include"ipgw.h"
+#include"../lib/nettools.h"
+#include"../lib/ipgw.h"
 
 using namespace std;
 
