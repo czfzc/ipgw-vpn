@@ -151,8 +151,8 @@ int indetify_user_by_user_name_and_src_ip(const u_char* user_name,u_int16_t user
         printf("server error!");
         return -1;
     }else{
-        memcpy(session_key,buf,16);
-        memcpy(client_subnet_ip,buf+16,4);
+        memcpy(session_key,buf+3,16);
+        memcpy(client_subnet_ip,buf+3+16,4);
         return 0;
     }
     close(sockfd);
@@ -312,19 +312,22 @@ void* recv_thread(void*){
                         u_int32_t c_subnet_ip = *(data32+4);
                         u_int32_t c_ip = from_client.sin_addr.s_addr;
                         u_int16_t c_udp_port = from_client.sin_port;
-                        u_int64_t udp_src_ip_and_subnet_ip;
-                        memcpy(&udp_src_ip_and_subnet_ip,&c_ip,4);
-                        memcpy(&udp_src_ip_and_subnet_ip+4,&c_subnet_ip,4);
-                        u_char sb_ip_and_session[20] ;
-                        u_char session[16];
-                        u_int32_t sb_ip;
-                        int status = cache.find_sb_by_client(udp_src_ip_and_subnet_ip,sb_ip_and_session);
+                        u_int64_t udp_src_ip_port_subnet_ip;
+                        memcpy(&udp_src_ip_port_subnet_ip,&c_ip,4);
+                        memcpy(&udp_src_ip_port_subnet_ip+4,&c_udp_port,2);
+                        memcpy(&udp_src_ip_port_subnet_ip+6,&c_subnet_ip+2,2);
+                        server_b_data* sb = new server_b_data;
+                    
+                        int status = cache.find_sb_by_client(udp_src_ip_port_subnet_ip,sb);
+
+                        u_char session_key[16];
+                        memcpy(session_key,sb->session_key,16);
+                        u_int32_t sb_ip = sb->sb_ip;
+
                         if(status == -1){
                             printf("ip client to server b transform fail!");
                             continue;
                         }else{
-                            memcpy(&sb_ip,sb_ip_and_session,4);
-                            memcpy(session,sb_ip_and_session+4,16);
                             *(data32+4)=sb_ip;
                             sockaddr_in target_sb_in;
                             target_sb_in.sin_family = AF_INET;
@@ -418,13 +421,11 @@ void* recv_thread(void*){
                        /*此处开始源地址转换 */
                        if(*(data->data+33)!=0x02){ //不是tcp握手包则伪装src ip发送至ipgw
                             u_int32_t sb_ip = *(data32+3);
-                            u_char client_udp_src_ip_and_port_and_subnet_ip_and_session[26];
-                            cache.find_client_by_sb(sb_ip,client_udp_src_ip_and_port_and_subnet_ip_and_session);
-                            u_char session[16];
-                            memcpy(session,client_udp_src_ip_and_port_and_subnet_ip_and_session+10,16);
-                            u_int32_t c_src_ip = 0;
-                            memcpy(&c_src_ip,client_udp_src_ip_and_port_and_subnet_ip_and_session,4);
-                            *(data32+3) = c_src_ip;
+                            client_data* client = new client_data;
+                            cache.find_client_by_sb(sb_ip,client);
+                            u_char session_key[16];
+                            memcpy(session_key,client->session_key,16);
+                            *(data32+3) = client->src_ip;
                             sockaddr_in ipgw_in;
                             ipgw_in.sin_family = AF_INET;
                             ipgw_in.sin_addr.s_addr = inet_addr(IPGW_IP_ADDR);
@@ -433,19 +434,15 @@ void* recv_thread(void*){
                             memcpy(&data->target,&ipgw_in,sizeof(struct sockaddr_in)); /*设置数据包目的地址为ipgw */
                         }else{                      //是tcp握手包则伪装为客户端内网ip通过udp打包
                             u_int32_t sb_ip = *(data32+3);
-                            u_char client_udp_src_ip_and_port_and_subnet_ip_and_session[26];
-                            cache.find_client_by_sb(sb_ip,client_udp_src_ip_and_port_and_subnet_ip_and_session);
-                            u_char session[16];
-                            memcpy(session,client_udp_src_ip_and_port_and_subnet_ip_and_session+10,16);
-                            u_int32_t c_subnet_ip = 0;
-                            memcpy(&c_subnet_ip,client_udp_src_ip_and_port_and_subnet_ip_and_session+6,4);
-                            *(data32+3) = c_subnet_ip;
-                            memcpy(data->session_key,session,16);   //拷贝加密session到数据包结构体
+                            client_data* client = new client_data;
+                            cache.find_client_by_sb(sb_ip,client);
+                            u_char session_key[16];
+                            memcpy(session_key,client->session_key,16);
+                            *(data32+3) = client->subnet_ip;
+                            memcpy(data->session_key,session_key,16);   //拷贝加密session到数据包结构体
                             sockaddr_in target_client;
-                            memcpy(&target_client.sin_port,
-                                client_udp_src_ip_and_port_and_subnet_ip_and_session+4,2);
-                            memcpy(&target_client.sin_addr,
-                                client_udp_src_ip_and_port_and_subnet_ip_and_session,4);
+                            target_client.sin_port = client->src_port;
+                            target_client.sin_addr.s_addr = client->src_ip;
                             target_client.sin_family = AF_INET;
                             bzero(&target_client.sin_zero,8);
                             memcpy(&(data->target),&target_client,sizeof(struct sockaddr_in));//拷贝udp目的地址到数据包结构体

@@ -8,7 +8,20 @@
 #include<iostream>
 #include<pthread.h>
 #include"nettools.h"
+#pragma pack(1)
 using namespace std;
+
+struct client_data{
+    u_int32_t src_ip = 0;
+    u_int16_t src_port = 0;
+    u_int32_t subnet_ip = 0;
+    u_char session_key[16];
+};
+
+struct server_b_data{
+    u_int32_t sb_ip;
+    u_char session_key[16];
+};
 
 class cacheuser{
     public:
@@ -22,9 +35,9 @@ class cacheuser{
         /*解绑定client和serverB */
         bool un_bind(u_int32_t sb_ip,u_int16_t c_uport,u_int32_t c_ip,u_int32_t c_subnet_ip,u_char* session_key);
         /*根据client查找serverB */
-        int find_sb_by_client(u_int64_t client_udp_src_ip_and_port,u_char* udp_src_ip_and_port_and_subnet_ip_and_session);
+        int find_sb_by_client(const u_int64_t client,server_b_data* sb);
         /*根据serverB查找client */
-        int find_client_by_sb(u_int32_t sb_ip,u_char* sb_ip_and_session);
+        int find_client_by_sb(const u_int32_t sb_ip,client_data* client);
         /*查看serverB是否在使用 */
         bool check_sb_using(u_int32_t sb_ip);
 
@@ -32,9 +45,9 @@ class cacheuser{
         /*初始化缓存数据库 */
         int init();
         /*serverB主机到client转换哈希表 */
-        map<u_int32_t,u_char*> sb_to_client;
+        map<u_int32_t,client_data*> sb_to_client;
         /*client到serverB主机转换哈希表 */
-        map<u_int64_t,u_char*> client_to_sb;
+        map<u_int64_t,server_b_data*> client_to_sb;
         /*可用的serverB */
         stack<u_int32_t> sb_stk; 
         /*已用的serverB */
@@ -45,94 +58,55 @@ class cacheuser{
 };
 
 int cacheuser::init(){
-    sb_stk.push(inet_addr("172.17.0.2"));
+    sb_stk.push(inet_addr("172.17.0.3"));
 }
 
 bool cacheuser::bind(u_int16_t c_uport,u_int32_t c_ip,u_int32_t c_subnet_ip,u_char* session_key,u_int32_t* sb_ip_t){
-  //  pthread_mutex_lock(&bind_mutex);
-    u_char *udp_src_ip_and_port_and_subnet_and_session = new u_char[26];
-    memcpy(udp_src_ip_and_port_and_subnet_and_session,&c_ip,4);
-    memcpy(udp_src_ip_and_port_and_subnet_and_session+4,&c_uport,2);
-    memcpy(udp_src_ip_and_port_and_subnet_and_session+6,&c_subnet_ip,4);
-    memcpy(udp_src_ip_and_port_and_subnet_and_session+10,session_key,16);
-    u_int32_t sb_ip = this->sb_stk.top();
-    this->sb_stk.pop();
-    this->sb_using.insert(sb_ip);
-    sb_to_client.insert(pair<u_int32_t,u_char*>(sb_ip,udp_src_ip_and_port_and_subnet_and_session));
-    u_char *sb_ip_and_session = new u_char[20];
-    u_int64_t udp_src_ip_and_subnet = 0;
-    memcpy(&udp_src_ip_and_subnet,&c_ip,4);
-    memcpy(&udp_src_ip_and_subnet+4,&c_subnet_ip,4);
-    memcpy(sb_ip_and_session,&sb_ip,4);
-    memcpy(sb_ip_and_session+4,session_key,16);
-    *sb_ip_t = sb_ip;
-    client_to_sb.insert(pair<u_int64_t,u_char*>(udp_src_ip_and_subnet,sb_ip_and_session));
-  //  pthread_mutex_unlock(&bind_mutex);
+    *sb_ip_t = sb_stk.top();
+    sb_stk.pop();
+
+    client_data *client = new client_data;
+    client->src_port = c_uport;
+    client->src_ip = c_ip;
+    client->subnet_ip = c_subnet_ip;
+    memcpy(client->session_key,session_key,16);
+    sb_to_client.insert(pair<u_int32_t,client_data*>(*sb_ip_t,client));
+
+    server_b_data *sb = new server_b_data;
+    sb->sb_ip = *sb_ip_t;
+    memcpy(sb->session_key,session_key,16);
+    u_int64_t client_ip_port_subnet_ip;
+    memcpy(&client_ip_port_subnet_ip,&c_ip,4);
+    memcpy(&client_ip_port_subnet_ip+4,&c_uport,2);
+    memcpy(&client_ip_port_subnet_ip+6,&c_subnet_ip+2,2);
+    client_to_sb.insert(pair<u_int64_t,server_b_data*>(client_ip_port_subnet_ip,sb));
     return true;
 }
 
 bool cacheuser::un_bind(u_int32_t sb_ip,u_int16_t c_uport,u_int32_t c_ip,u_int32_t c_subnet_ip,u_char* session_key){
-  //  pthread_mutex_lock(&un_bind_mutex);
-    u_char *udp_src_ip_and_port_and_subnet_and_session = new u_char[26];
-    memcpy(udp_src_ip_and_port_and_subnet_and_session,&c_ip,4);
-    memcpy(udp_src_ip_and_port_and_subnet_and_session+4,&c_uport,2);
-    memcpy(udp_src_ip_and_port_and_subnet_and_session+6,&c_subnet_ip,4);
-    memcpy(udp_src_ip_and_port_and_subnet_and_session+10,session_key,16);
-    map<u_int32_t,u_char*>::iterator sb_to_client_ite = sb_to_client.find(sb_ip);
-    if(sb_to_client_ite == sb_to_client.end()){
-        cout<<"invalid sb_ip"<<endl;
-        return false;
-    }else{
-        if(memcmp(sb_to_client_ite->second,udp_src_ip_and_port_and_subnet_and_session,22)==0)
-            sb_to_client.erase(sb_to_client_ite);
-        else{
-            cout<<"invalid client"<<endl;
-            return false;
-        }
-    }
-    u_char *sb_ip_and_session = new u_char[24];
-    u_int64_t udp_src_and_port_and_subnet = 0;
-    memcpy(&udp_src_and_port_and_subnet,&c_ip,4);
-    memcpy(&udp_src_and_port_and_subnet+4,&c_uport,2);
-    memcpy(sb_ip_and_session,&sb_ip,4);
-    memcpy(sb_ip_and_session+4,session_key,16);
-    memcpy(sb_ip_and_session+20,&c_subnet_ip,24);
-    map<u_int64_t,u_char*>::iterator client_to_sb_ite = client_to_sb.find(udp_src_and_port_and_subnet);
-    if(client_to_sb_ite == client_to_sb.end()){
-        cout<<"invalid client"<<endl;
-        return false;
-    }else{
-        if(memcmp(client_to_sb_ite->second,sb_ip_and_session,20)==0){
-            client_to_sb.erase(client_to_sb_ite);
-            this->sb_stk.push(sb_ip);
-            this->sb_using.erase(sb_ip);
-        }else{
-            cout<<"invalid sb_ip"<<endl;
-            return false;
-        }
-    }
- //   pthread_mutex_unlock(&un_bind_mutex);
+    /*暂未实现 */
     return true;
 }
 
-int cacheuser::find_client_by_sb(u_int32_t sb_ip,u_char* client_udp_src_ip_and_port_and_subnet_ip_and_session){
-    if(client_udp_src_ip_and_port_and_subnet_ip_and_session==NULL) return -1;
-    map<u_int32_t,u_char*>::iterator sb_ite = sb_to_client.find(sb_ip);
+int cacheuser::find_client_by_sb(const u_int32_t sb_ip,client_data* client){
+    if(client==NULL)
+        return -1;
+    map<u_int32_t,client_data*>::iterator sb_ite = sb_to_client.find(sb_ip);
     if(sb_ite == sb_to_client.end())
         return -1;
     else{
-        memcpy(client_udp_src_ip_and_port_and_subnet_ip_and_session,sb_ite->second,26);
+        memcpy(client,sb_ite->second,sizeof(client_data));
         return 0;
     }
 }
 
-int cacheuser::find_sb_by_client(u_int64_t client_udp_src_ip_and_subnet_ip,u_char* sb_ip_and_session){
-    if(sb_ip_and_session==NULL) return -1;
-    map<u_int64_t,u_char*>::iterator client_ite = client_to_sb.find(client_udp_src_ip_and_subnet_ip);
+int cacheuser::find_sb_by_client(const u_int64_t client,server_b_data* sb){
+    if(sb==NULL) return -1;
+    map<u_int64_t,server_b_data*>::iterator client_ite = client_to_sb.find(client);
     if(client_ite == client_to_sb.end())
         return -1;
     else{
-        memcpy(sb_ip_and_session,client_ite->second,20);
+        memcpy(sb,client_ite->second,sizeof(server_b_data));
         return 0;
     }
 }
