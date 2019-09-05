@@ -24,10 +24,10 @@ int init(){
     }
     sockaddr_in addr;
     addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htons(INADDR_ANY);
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
     addr.sin_port = htons(DEFAULT_UDP_PORT);
-    bzero(&addr,8);
-    if(bind(sock_udp_fd,(sockaddr*)&addr,sizeof(sockaddr_in))<0){
+    bzero(&addr.sin_zero,8);
+    if(bind(sock_udp_fd,(sockaddr*)&addr,sizeof(sockaddr))<0){
         printf("bind udp port error!\n");
     }
 }
