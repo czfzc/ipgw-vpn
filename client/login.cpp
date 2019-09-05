@@ -23,9 +23,10 @@ struct dgram_data{
     u_char data[MAX_DATA_SIZE] = {0};
 };
 
-int sock_tcp_fd;
+int sock_tcp_fd,sock_udp_fd;
 
 int init(){
+    /*初始化给server发送tcp */
     sock_tcp_fd = socket(AF_INET,SOCK_STREAM,0);
     if(sock_tcp_fd<0){
         printf("error to create tcp socket\n");
@@ -46,6 +47,15 @@ int init(){
         printf("connect error!\n");
         return -1;
     }
+
+    /*初始化发送udp */
+    sock_udp_fd = socket(AF_INET,SOCK_DGRAM,0);
+    if(sock_udp_fd<0){
+        printf("error to create udp socket\n");
+        return -1;
+    }
+    printf("%d hahahh\n",sock_udp_fd);
+
 }
 
 int print_dgram_data(const struct dgram_data* dgram_data){
@@ -128,10 +138,11 @@ int step_request_to_login(u_char* session_key,const u_char* user_name,const u_in
     if(recv_data.op_code != 4) return -1;
 
     memcpy(session_key,recv_data.data,16);
+    return 0;
 }
 
-/*联网步骤 */
-int step_connect_to_ipgw(const u_char* session_key,const u_int32_t* subnet_ip,u_int32_t* serverA_ip){
+/*联网第一步骤 向server发送申请*/
+int step_1_connect_to_ipgw(const u_char* session_key,const u_int32_t* subnet_ip,u_int32_t* serverA_ip){
     if(session_key==NULL||subnet_ip==NULL){
         printf("null pointer param!\n");
         return -1;
@@ -145,6 +156,41 @@ int step_connect_to_ipgw(const u_char* session_key,const u_int32_t* subnet_ip,u_
     request_data(sock_tcp_fd,&send_data,&recv_data);
 
     memcpy(serverA_ip,recv_data.data,4);
+    return 0;
+}
+
+/*联网第二步骤 发送向serverA申请连接的信号(udp)*/
+int step_2_connect_to_ipgw(u_int32_t serverA_ip,const u_char* session_key){
+
+    printf("%d hahahh2\n",sock_udp_fd);
+
+    sockaddr_in sa;
+    sa.sin_family = AF_INET;
+    sa.sin_addr.s_addr = serverA_ip;
+    sa.sin_port = htons(1026);
+  //  bzero(&sa.sin_zero,8);
+
+    int n = sendto(sock_udp_fd,session_key,16,0,(sockaddr*)&sa,sizeof(sockaddr_in));
+    if(n<0){
+        printf("error to send udp %d\n",errno);
+        return -1;
+    }
+    u_char buf[MAX_DATA_SIZE];
+    sockaddr_in from;
+    socklen_t from_len = sizeof(sockaddr_in);
+    n = recvfrom(sock_udp_fd,buf,MAX_DATA_SIZE,0,(sockaddr*)&from,&from_len);
+    if(n<0){
+        printf("error to recv udp %d\n",errno);
+        return -1;
+    }
+    if(buf[0]==14){
+        printf("success!\n");
+    }else if(buf[0]==0){
+        buf[n]='\0';
+        printf("err: %s\n",buf);
+        return -1;
+    }
+    return 0;
 }
 
 void *main_thread(void*){
@@ -153,13 +199,18 @@ void *main_thread(void*){
     u_char session_key[16];
     if(init()<0)
         return NULL;
-     if(step_request_to_login(session_key,user_name,user_name_len,password,password_len)<0)
+    if(step_request_to_login(session_key,user_name,user_name_len,password,password_len)<0)
         return NULL;
-     if(step_connect_to_ipgw(session_key,&subnet_ip,&sa_ip)<0)
+    if(step_1_connect_to_ipgw(session_key,&subnet_ip,&sa_ip)<0)
         return NULL;
+    printf("%d aaa\n",sock_udp_fd);
     in_addr sa;
     sa.s_addr = sa_ip;
     printf("server A ip is %s\n",inet_ntoa(sa));
+
+    if(step_2_connect_to_ipgw(sa_ip,session_key)<0)
+        return NULL;
+
 }
 
 int main(){

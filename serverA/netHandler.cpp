@@ -12,9 +12,10 @@
 #include<pthread.h>
 #include<cerrno>
 #include<queue>
+#include"../lib/checksum.h"
 #include"../lib/ipgw.h"
 #include"../lib/cacheuser.h"
-#include"../lib/arp.h"
+//#include"../lib/arp.h"
 
 #define SERVER_DOMAIN "s.ipgw.top"
 /* 
@@ -98,6 +99,51 @@ int init(){
     return 0;
 }
 
+/*-1代表验证失败 0代表验证成功 */
+int indetify_user_by_user_name_and_src_ip(u_char* user_name,u_int16_t user_name_len,
+        u_int32_t client_src_ip,u_char* error_mes,u_int16_t *error_mes_len,u_char* session_key,
+        u_int32_t* client_subnet_ip){
+    u_int32_t server_ip;
+    socket_resolver(SERVER_DOMAIN,&server_ip);
+
+    int sockfd;
+    u_char buf[MAX_DATA_SIZE];
+    struct sockaddr_in server;
+    while((sockfd = socket (AF_INET,SOCK_STREAM,0))==-1);
+    server.sin_family = AF_INET;
+    server.sin_port = htons(DEFAULT_SERVER_PORT);
+    server.sin_addr.s_addr = server_ip;
+    bzero(&(server.sin_zero),8);
+
+    while(connect(sockfd,(struct sockaddr*)&server,sizeof(struct sockaddr))==-1);
+
+    printf("connected to %s\n",inet_ntoa(server.sin_addr));
+
+    u_char data[user_name_len+8];
+    int datalen = user_name_len+8;
+    u_int16_t src_ip_len=4;
+    memcpy(data,&user_name_len,2);
+    memcpy(data+2,user_name,user_name_len);
+    memcpy(data+2+user_name_len,&src_ip_len,2);
+    memcpy(data+4+user_name_len,&client_src_ip,4);
+    send(sockfd,data,datalen,0);
+    recv(sockfd,buf,MAX_DATA_SIZE,0);
+    if(buf[0] == 0){
+        u_int16_t error_len = 0;
+        memcpy(&error_len,buf+1,2);
+        memcpy(error_mes,buf+3,error_len);
+        *error_mes_len = error_len;
+        printf("server error!");
+        return -1;
+    }else{
+        memcpy(session_key,buf,16);
+        memcpy(client_subnet_ip,buf+16,4);
+        return 0;
+    }
+    close(sockfd);
+}
+
+
 /*********************************
  * 
  * 向指定serverB发送联网指令 返回0代表成功 -1代表失败 -2代表目标返回数据包格式错误
@@ -142,6 +188,71 @@ int send_ipgw_flood_command(u_int32_t sb_ip,u_char* mes,u_int16_t* mes_len){
         printf("error udp dgram!\n");
         return -2;
     } 
+}
+
+void* indetify_thread(void* args){
+    sockaddr_in* from_client = (sockaddr_in*)((void**)args)[0];
+    u_int16_t* user_name_len = (u_int16_t*)((void**)args)[1];
+    u_char** user_name = (u_char**)((void**)args)[2];
+    u_char error_mes[256];
+    u_char session_key[16];
+    u_int32_t c_subnet_ip = 0;
+    u_int16_t error_mes_len = 0;
+    int status = indetify_user_by_user_name_and_src_ip(*user_name,*user_name_len,from_client->sin_addr.s_addr,
+            error_mes,&error_mes_len,session_key,&c_subnet_ip);
+    if(status==-1){     /*验证不通过 直接向client返回 */
+        u_char data[error_mes_len+2];
+        memcpy(data,&error_mes_len,2);
+        memcpy(data+2,error_mes,error_mes_len);
+        int n = sendto(sock_udp_fd,data,error_mes_len+2,0,(sockaddr*)from_client,sizeof(sockaddr));
+        if(n!=-1){
+            return NULL;
+        }else{
+            printf("send udp to client to return error fail");
+        }
+    }else{              /*验证通过 开始分配空余主机做serverB并且给serverB下达联网指令 */
+        /*获取本机ip */
+       /* u_int32_t this_serverA_ip;
+        get_eth_IP(DEFAULT_DEVICE_NAME_MAIN,(u_char*)&this_serverA_ip);*/
+        u_int32_t sb_ip = 0;
+        bool status = cache.bind(from_client->sin_port,from_client->sin_addr.s_addr,c_subnet_ip,session_key,&sb_ip);
+        if(status){     /*绑定成功 */
+            printf("bind success!\n");
+            /*开始下达联网指令 */
+            u_char mes[MAX_DATA_SIZE];
+            u_int16_t mes_len = 0;
+            int status = send_ipgw_flood_command(sb_ip,mes,&mes_len);
+            if(status == 0 ){
+                printf("successful to connect ipgw!\n");
+                char mes[]="successful to connect ipgw!";
+                u_int16_t mes_len = strlen(mes);
+                u_char data[mes_len+2];
+                memcpy(data,&mes_len,2);
+                memcpy(data,mes,mes_len);
+            }else if(status == -1 ||status == -2){
+                char mes[]="error to connect ipgw";
+                u_int16_t mes_len = strlen(mes);
+                u_char data[mes_len+2];
+                memcpy(data,&mes_len,2);
+                memcpy(data,mes,mes_len);
+                int n = sendto(sock_udp_fd,data,mes_len+2,0,(sockaddr*)from_client,sizeof(sockaddr));
+                if(n<0){
+                    printf("send error to client failed\n");
+                }
+            }
+        }else{      /*绑定失败 返回用户失败信息 */
+            printf("bind error!\n");
+            char mes[]="error to bind user to server B";
+            u_int16_t mes_len = strlen(mes);
+            u_char data[mes_len+2];
+            memcpy(data,&mes_len,2);
+            memcpy(data,mes,mes_len);
+            int n = sendto(sock_udp_fd,data,mes_len+2,0,(sockaddr*)from_client,sizeof(sockaddr));
+            if(n<0){
+                printf("send error to client failed\n");
+            }
+        }
+    }
 }
 
 void* recv_thread(void*){
@@ -246,17 +357,21 @@ void* recv_thread(void*){
             if(FD_ISSET(sock_raw_fd,&read_set)){ /*sock raw有数据 */
                 packet *data = new packet;
                 data->data = new u_char[MAX_DATA_SIZE];
-                socklen_t socklen=sizeof(sockaddr_ll);
+              /*   socklen_t socklen=sizeof(sockaddr_ll);
 		        sockaddr_ll addr_recv;
-                int n = recvfrom(sock_raw_fd,data->data,MAX_DATA_SIZE,0,(sockaddr*)&addr_recv,&socklen);
-                if(addr_recv.sll_ifindex!=addr_ll.sll_ifindex){ /*过滤掉不属于对应网卡的数据包 */
+                 int n = recvfrom(sock_raw_fd,data->data,MAX_DATA_SIZE,0,(sockaddr*)&addr_recv,&socklen);
+                if(addr_recv.sll_ifindex!=addr_ll.sll_ifindex){ //过滤掉不属于对应网卡的数据包 
                     delete data->data;
                     delete data;
 		            continue;
                 }
-             
+             */
                // printf("raw:\n");
                // print_data(data->data,n);
+                sockaddr_in from;
+                socklen_t socklen=sizeof(sockaddr_in);
+                int n = recvfrom(sock_ip_fd,data->data,MAX_DATA_SIZE,0,(sockaddr*)&from,&socklen);
+                data->data_len = n;
                 if(n < 0){
                     printf("raw socket recvfrom() error");
                     delete data->data;
@@ -264,7 +379,7 @@ void* recv_thread(void*){
                 }else{
                     data->data_len = n;
                     u_int32_t client_subnet = inet_addr(CLIENT_SUBNET_IP_ADDR);
-                    if(memcmp(data->data+6,SERVER_B_MAC_SUBNET,6)==0&&*(data->data+23)==0x06&&*(data->data+47)!=0x12){ 
+                    if(cache.check_sb_using(from.sin_addr.s_addr)&&*(data->data+33)!=0x12){ 
                         /*判断是从serverB来的tcp数据包 并且过滤raw socket发送的包*/
                         printf("raw receved\n");
                         u_char temp[MAX_DATA_SIZE];
@@ -340,6 +455,7 @@ void* recv_thread(void*){
     }
 }
 
+
 void* send_thread(void*){
     while(1){
         pthread_mutex_lock(&pthread_mutex);
@@ -393,115 +509,6 @@ void* print_thread(void*){
     }
 }
 
-void* indetify_thread(void* args){
-    sockaddr_in* from_client = (sockaddr_in*)((void**)args)[0];
-    u_int16_t* user_name_len = (u_int16_t*)((void**)args)[1];
-    u_char** user_name = (u_char**)((void**)args)[2];
-    u_char error_mes[256];
-    u_char session_key[16];
-    u_int32_t c_subnet_ip = 0;
-    u_int16_t error_mes_len = 0;
-    int status = indetify_user_by_user_name_and_src_ip(*user_name,*user_name_len,from_client->sin_addr.s_addr,
-            error_mes,&error_mes_len,session_key,&c_subnet_ip);
-    if(status==-1){     /*验证不通过 直接向client返回 */
-        u_char data[error_mes_len+2];
-        memcpy(data,&error_mes_len,2);
-        memcpy(data+2,error_mes,error_mes_len);
-        int n = sendto(sock_udp_fd,data,error_mes_len+2,0,(sockaddr*)from_client,sizeof(sockaddr));
-        if(n!=-1){
-            return;
-        }else{
-            printf("send udp to client to return error fail");
-        }
-    }else{              /*验证通过 开始分配空余主机做serverB并且给serverB下达联网指令 */
-        /*获取本机ip */
-       /* u_int32_t this_serverA_ip;
-        get_eth_IP(DEFAULT_DEVICE_NAME_MAIN,(u_char*)&this_serverA_ip);*/
-        u_int32_t sb_ip = 0;
-        bool status = cache.bind(from_client->sin_port,from_client->sin_addr.s_addr,c_subnet_ip,session_key,&sb_ip);
-        if(status){     /*绑定成功 */
-            printf("bind success!\n");
-            /*开始下达联网指令 */
-            u_char mes[MAX_DATA_SIZE];
-            u_int16_t mes_len = 0;
-            int status = send_ipgw_flood_command(sb_ip,mes,&mes_len);
-            if(status == 0 ){
-                printf("successful to connect ipgw!\n");
-                char mes[]="successful to connect ipgw!";
-                u_int16_t mes_len = strlen(mes);
-                u_char data[mes_len+2];
-                memcpy(data,&mes_len,2);
-                memcpy(data,mes,mes_len);
-            }else if(status == -1 ||status == -2){
-                char mes[]="error to connect ipgw";
-                u_int16_t mes_len = strlen(mes);
-                u_char data[mes_len+2];
-                memcpy(data,&mes_len,2);
-                memcpy(data,mes,mes_len);
-                int n = sendto(sock_udp_fd,data,mes_len+2,0,(sockaddr*)from_client,sizeof(sockaddr));
-                if(n<0){
-                    printf("send error to client failed\n");
-                }
-            }
-        }else{      /*绑定失败 返回用户失败信息 */
-            printf("bind error!\n");
-            char mes[]="error to bind user to server B";
-            u_int16_t mes_len = strlen(mes);
-            u_char data[mes_len+2];
-            memcpy(data,&mes_len,2);
-            memcpy(data,mes,mes_len);
-            int n = sendto(sock_udp_fd,data,mes_len+2,0,(sockaddr*)from_client,sizeof(sockaddr));
-            if(n<0){
-                printf("send error to client failed\n");
-            }
-        }
-    }
-}
-
-/*-1代表验证失败 0代表验证成功 */
-int indetify_user_by_user_name_and_src_ip(u_char* user_name,u_int16_t user_name_len,
-        u_int32_t client_src_ip,u_char* error_mes,u_int16_t *error_mes_len,u_char* session_key,
-        u_int32_t* client_subnet_ip){
-    u_int32_t server_ip;
-    socket_resolver(SERVER_DOMAIN,&server_ip);
-
-    int sockfd;
-    u_char buf[MAX_DATA_SIZE];
-    struct sockaddr_in server;
-    while((sockfd = socket (AF_INET,SOCK_STREAM,0))==-1);
-    server.sin_family = AF_INET;
-    server.sin_port = htons(DEFAULT_SERVER_PORT);
-    server.sin_addr.s_addr = server_ip;
-    bzero(&(server.sin_zero),8);
-
-    while(connect(sockfd,(struct sockaddr*)&server,sizeof(struct sockaddr))==-1);
-
-    printf("connected to %s\n",inet_ntoa(server.sin_addr));
-
-    u_char data[user_name_len+8];
-    int datalen = user_name_len+8;
-    u_int16_t src_ip_len=4;
-    memcpy(data,&user_name_len,2);
-    memcpy(data+2,user_name,user_name_len);
-    memcpy(data+2+user_name_len,&src_ip_len,2);
-    memcpy(data+4+user_name_len,&client_src_ip,4);
-    send(sockfd,data,datalen,0);
-    recv(sockfd,buf,MAX_DATA_SIZE,0);
-    if(buf[0] == 0){
-        u_int16_t error_len = 0;
-        memcpy(&error_len,buf+1,2);
-        memcpy(error_mes,buf+3,error_len);
-        *error_mes_len = error_len;
-        printf("server error!");
-        return -1;
-    }else{
-        memcpy(session_key,buf,16);
-        memcpy(client_subnet_ip,buf+16,4);
-        return 0;
-    }
-    close(sockfd);
-}
-
 void* main_thread(void*){
     pthread_t recv,send,print;
     pthread_mutex_init(&pthread_mutex,NULL);
@@ -513,4 +520,18 @@ void* main_thread(void*){
     pthread_create(&recv,NULL,recv_thread,NULL);
     pthread_create(&send,NULL,send_thread,NULL);
     pthread_create(&print,NULL,print_thread,NULL);
+}
+
+
+int main(){
+    pthread_t main;
+    int err = pthread_create(&main,NULL,main_thread,NULL);
+    if(err != 0){
+        perror("fail to create thread");
+        return -1;
+    }
+    pthread_join(main,NULL);
+    while(1){
+        sleep(1000000);
+    }
 }

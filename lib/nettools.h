@@ -144,7 +144,7 @@ int socket_resolver(const char *domain, u_int32_t *ipaddr)
 
 /***********************
  * 
- * 计算16bit md5
+ * 计算16b md5
  * 
  ***********************/
 int md5_16(u_char* result,const u_char* content,int content_len){
