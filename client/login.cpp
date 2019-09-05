@@ -160,17 +160,19 @@ int step_1_connect_to_ipgw(const u_char* session_key,const u_int32_t* subnet_ip,
 }
 
 /*联网第二步骤 发送向serverA申请连接的信号(udp)*/
-int step_2_connect_to_ipgw(u_int32_t serverA_ip,const u_char* session_key){
-
-    printf("%d hahahh2\n",sock_udp_fd);
+int step_2_connect_to_ipgw(u_int32_t serverA_ip,const u_char* user_name,const u_int32_t user_name_len){
 
     sockaddr_in sa;
     sa.sin_family = AF_INET;
     sa.sin_addr.s_addr = serverA_ip;
     sa.sin_port = htons(1026);
-  //  bzero(&sa.sin_zero,8);
+    bzero(&sa.sin_zero,8);
 
-    int n = sendto(sock_udp_fd,session_key,16,0,(sockaddr*)&sa,sizeof(sockaddr_in));
+    u_char data[user_name_len+2];
+    memcpy(data,&user_name_len,2);
+    memcpy(data+2,user_name,user_name_len);
+
+    int n = sendto(sock_udp_fd,data,user_name_len+2,0,(sockaddr*)&sa,sizeof(sockaddr_in));
     if(n<0){
         printf("error to send udp %d\n",errno);
         return -1;
@@ -183,13 +185,19 @@ int step_2_connect_to_ipgw(u_int32_t serverA_ip,const u_char* session_key){
         printf("error to recv udp %d\n",errno);
         return -1;
     }
-    if(buf[0]==14){
+    u_char mes[MAX_DATA_SIZE];
+    u_int16_t mes_len = 0;
+    memcpy(&mes_len,mes,2);
+    memcpy(mes,buf+2,mes_len);
+    mes[mes_len] = '\0';
+    printf("result from serverA: %s\n",mes);
+ /*    if(buf[0]==14){
         printf("success!\n");
     }else if(buf[0]==0){
         buf[n]='\0';
         printf("err: %s\n",buf);
         return -1;
-    }
+    }*/
     return 0;
 }
 
@@ -203,14 +211,13 @@ void *main_thread(void*){
         return NULL;
     if(step_1_connect_to_ipgw(session_key,&subnet_ip,&sa_ip)<0)
         return NULL;
-    printf("%d aaa\n",sock_udp_fd);
     in_addr sa;
     sa.s_addr = sa_ip;
     printf("server A ip is %s\n",inet_ntoa(sa));
-
-    if(step_2_connect_to_ipgw(sa_ip,session_key)<0)
+     
+    if(step_2_connect_to_ipgw(sa_ip,user_name,user_name_len)<0)
         return NULL;
-
+    
 }
 
 int main(){
