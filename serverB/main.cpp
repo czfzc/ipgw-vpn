@@ -9,7 +9,7 @@
 #include<sys/socket.h>
 #include<unistd.h>
 #include<pthread.h>
-#include"connector/request_ipgw.h"
+#include"../lib/connector/request_ipgw.h"
 
 #define DEFAULT_UDP_PORT 1026
 #define MAX_DATA_SIZE 1536
