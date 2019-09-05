@@ -126,8 +126,19 @@ int indetify_user_by_user_name_and_src_ip(u_char* user_name,u_int16_t user_name_
     memcpy(data+2,user_name,user_name_len);
     memcpy(data+2+user_name_len,&src_ip_len,2);
     memcpy(data+4+user_name_len,&client_src_ip,4);
-    send(sockfd,data,datalen,0);
-    recv(sockfd,buf,MAX_DATA_SIZE,0);
+    int n = send(sockfd,data,datalen,0);
+    if(n<0){
+    	printf("error to send tcp\n");
+    }
+    printf("send len %d\n",datalen);
+   // printf("sended:\n");
+   // print_data(data,datalen);
+    n = recv(sockfd,buf,MAX_DATA_SIZE,0);
+    if(n<0){
+	printf("error to recv udp\n");
+    }
+    printf("recvdata:\n");
+    print_data(buf,n);
     if(buf[0] == 0){
         u_int16_t error_len = 0;
         memcpy(&error_len,buf+1,2);
@@ -504,7 +515,7 @@ void* print_thread(void*){
     while(true){
         usleep(500000);
         pthread_mutex_lock(&pthread_mutex);
-        printf("queue size: %d\n",data_queue.size());
+//        printf("queue size: %d\n",data_queue.size());
         pthread_mutex_unlock(&pthread_mutex);
     }
 }
