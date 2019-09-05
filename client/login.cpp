@@ -187,11 +187,14 @@ int step_2_connect_to_ipgw(u_int32_t serverA_ip,const u_char* user_name,const u_
         printf("error to recv udp %d\n",errno);
         return -1;
     }
+    printf("recv udp:\n");
+    print_data(buf,n);
     u_char mes[MAX_DATA_SIZE];
     u_int16_t mes_len = 0;
-    memcpy(&mes_len,mes,2);
+    memcpy(&mes_len,buf,2);
     memcpy(mes,buf+2,mes_len);
     mes[mes_len] = '\0';
+    printf("mes_len: %d",mes_len);
     printf("result from serverA: %s\n",mes);
  /*    if(buf[0]==14){
         printf("success!\n");
