@@ -173,6 +173,8 @@ int step_2_connect_to_ipgw(u_int32_t serverA_ip,const u_char* user_name,const u_
     memcpy(data+2,user_name,user_name_len);
 
     int n = sendto(sock_udp_fd,data,user_name_len+2,0,(sockaddr*)&sa,sizeof(sockaddr_in));
+    printf("sended user_name udp\n");
+    print_data(data,user_name_len+2);
     if(n<0){
         printf("error to send udp %d\n",errno);
         return -1;
