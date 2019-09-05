@@ -100,7 +100,7 @@ int init(){
 }
 
 /*-1代表验证失败 0代表验证成功 */
-int indetify_user_by_user_name_and_src_ip(u_char* user_name,u_int16_t user_name_len,
+int indetify_user_by_user_name_and_src_ip(const u_char* user_name,u_int16_t user_name_len,
         u_int32_t client_src_ip,u_char* error_mes,u_int16_t *error_mes_len,u_char* session_key,
         u_int32_t* client_subnet_ip){
     u_int32_t server_ip;
@@ -120,22 +120,26 @@ int indetify_user_by_user_name_and_src_ip(u_char* user_name,u_int16_t user_name_
     printf("connected to %s\n",inet_ntoa(server.sin_addr));
 
     u_char data[user_name_len+8];
-    int datalen = user_name_len+8;
+    u_int16_t datalen = user_name_len+8;
     u_int16_t src_ip_len=4;
     memcpy(data,&user_name_len,2);
     memcpy(data+2,user_name,user_name_len);
     memcpy(data+2+user_name_len,&src_ip_len,2);
     memcpy(data+4+user_name_len,&client_src_ip,4);
-    int n = send(sockfd,data,datalen,0);
+    u_char send_data[user_name_len+8+3];
+    send_data[0] = 11;
+    memcpy(send_data+1,&datalen,2);
+    memcpy(send_data+3,data,user_name_len+8);
+    int n = send(sockfd,send_data,datalen+8+3,0);
     if(n<0){
     	printf("error to send tcp\n");
     }
-    printf("send len %d\n",datalen);
+    printf("send len %d\n",n);
    // printf("sended:\n");
    // print_data(data,datalen);
     n = recv(sockfd,buf,MAX_DATA_SIZE,0);
     if(n<0){
-	printf("error to recv udp\n");
+	    printf("error to recv udp\n");
     }
     printf("recvdata:\n");
     print_data(buf,n);
@@ -209,6 +213,7 @@ void* indetify_thread(void* args){
     u_char session_key[16];
     u_int32_t c_subnet_ip = 0;
     u_int16_t error_mes_len = 0;
+    printf("sbsbsbsb  %s",inet_ntoa(from_client->sin_addr));
     int status = indetify_user_by_user_name_and_src_ip(*user_name,*user_name_len,from_client->sin_addr.s_addr,
             error_mes,&error_mes_len,session_key,&c_subnet_ip);
     if(status==-1){     /*验证不通过 直接向client返回 */
@@ -294,7 +299,7 @@ void* recv_thread(void*){
                     delete data;
                     continue;
                 }else{
-                    if(*(data->data+9)==0x06){ /*收到的来自client用udp打包的从ipgw来的ip包 应发给对应serverB */
+                    if(n>9&&*(data->data+9)==0x06){ /*收到的来自client用udp打包的从ipgw来的ip包 应发给对应serverB */
                         printf("udp receved\n");
                         /*修改目的ip 并且重新计算校验和*/
                         u_int32_t *data32 = (u_int32_t*)data->data;
