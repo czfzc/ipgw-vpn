@@ -25,6 +25,7 @@
 #define DEFAULT_DEVICE_NAME_MAIN "enp5s0"
 #define MAX_BUFFER_QUEUE_SIZE 5000
 #define SERVER_DOMAIN "s.ipgw.top"
+#define DEFAULT_DNS_SERVER "202.118.1.29"
 
 
 typedef struct{

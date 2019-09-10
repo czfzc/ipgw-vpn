@@ -16,6 +16,7 @@
 #include<netdb.h>
 #include"checksum.h"
 #include"md5.c"
+#include"ipgw.h"
 
 /*************************************
  * 
@@ -158,6 +159,37 @@ int md5_16(u_char* result,const u_char* content,int content_len){
 	md5_append(&state, (const md5_byte_t *)content, content_len);
 	md5_finish(&state, digest);
     memcpy(result,&digest,16);
+}
+
+int get_local_ip_using_create_socket(u_int32_t *subnet_ip) 
+{
+    int status = -1;
+    int af = AF_INET;
+    int sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    struct sockaddr_in remote_addr;
+    struct sockaddr_in local_addr;
+    char *local_ip = NULL;
+    socklen_t len = 0;
+
+    remote_addr.sin_family = AF_INET;
+    remote_addr.sin_port = htons(53);
+    remote_addr.sin_addr.s_addr = inet_addr(DEFAULT_DNS_SERVER);
+
+    len =  sizeof(struct sockaddr_in);
+    status = connect(sock_fd, (struct sockaddr*)&remote_addr, len);
+    if(status != 0 ){
+        printf("connect err \n");
+    }
+
+    len =  sizeof(struct sockaddr_in);
+    getsockname(sock_fd, (struct sockaddr*)&local_addr, &len);
+
+    if(local_addr.sin_addr)
+    {
+        *subnet_ip = local_addr.sin_addr.s_addr;
+        status = 0;
+    }
+    return status;
 }
 
 #endif

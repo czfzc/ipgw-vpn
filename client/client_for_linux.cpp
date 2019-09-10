@@ -7,7 +7,6 @@
 #include"../lib/nettools.h"
 #include"../lib/ipgw.h"
 
-#define SUBNET_IP "192.168.1.102"
 #undef SERVER_DOMAIN
 #define SERVER_DOMAIN "localhost"
 
@@ -32,7 +31,18 @@ static queue<packet*> data_queue;
 
 int sock_tcp_fd,sock_udp_fd,sock_ip_fd;
 
+static u_int32_t client_subnet_ip = 0;
+
 int init(){
+
+    if(get_local_ip_using_create_socket(&client_subnet_ip)<0){
+        printf("fail to get local ip addr\n");
+        return -1;
+    }else{
+        in_addr ad;
+        ad.s_addr = client_subnet_ip;
+        printf("local subnet ip is %s\n",inet_ntoa(ad));
+    }
     /*初始化给server发送tcp */
     sock_tcp_fd = socket(AF_INET,SOCK_STREAM,0);
     if(sock_tcp_fd<0){
@@ -63,7 +73,7 @@ int init(){
     }
     sockaddr_in client;
     client.sin_family = AF_INET;
-    client.sin_addr.s_addr = inet_addr(CLIENT_SUBNET_IP_ADDR);
+    client.sin_addr.s_addr = client_subnet_ip;
     client.sin_port = htons(DEFAULT_UDP_PORT);
     if(bind(sock_udp_fd,(sockaddr*)&client,sizeof(sockaddr))<0){
         printf("bind udp error\n");
@@ -137,7 +147,7 @@ void* send_thread(void*){
             }
             delete data->data;
             delete data;
-        }else if(src_ip == inet_addr(CLIENT_SUBNET_IP_ADDR)){
+        }else if(src_ip == client_subnet_ip){
             int n = send(sock_ip_fd,data->data,data->data_len,0);
             if(n<0){
                 perror("send tcp dgram error");
@@ -339,14 +349,13 @@ int step_open_dgram_recv_and_pack(u_int32_t sa_ip){
 }
 
 void *main_thread(void*){
-    u_int32_t subnet_ip = inet_addr(SUBNET_IP);
     u_int32_t sa_ip = 0;
     u_char session_key[16];
     if(init()<0)
         return NULL;
     if(step_request_to_login(session_key,user_name,user_name_len,password,password_len)<0)
         return NULL;
-    if(step_1_connect_to_ipgw(session_key,&subnet_ip,&sa_ip)<0)
+    if(step_1_connect_to_ipgw(session_key,&client_subnet_ip,&sa_ip)<0)
         return NULL;
     in_addr sa;
     sa.s_addr = sa_ip;
