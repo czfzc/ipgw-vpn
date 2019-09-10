@@ -2,6 +2,7 @@
 #include<pthread.h>
 #include<unistd.h>
 #include<stdlib.h>
+#include<queue>
 #include"../lib/checksum.h"
 #include"../lib/nettools.h"
 #include"../lib/ipgw.h"
@@ -11,6 +12,8 @@
 #define SERVER_DOMAIN "localhost"
 
 #pragma pack(1)
+
+using namespace std;
 
 u_char user_name[]={'c','z','f','z','c'};
 u_char password[]={'c','a','o','r','i','c','e'};
@@ -23,7 +26,11 @@ struct dgram_data{
     u_char data[MAX_DATA_SIZE] = {0};
 };
 
-int sock_tcp_fd,sock_udp_fd;
+pthread_mutex_t pthread_mutex;
+
+static queue<packet*> data_queue;
+
+int sock_tcp_fd,sock_udp_fd,sock_ip_fd;
 
 int init(){
     /*初始化给server发送tcp */
@@ -54,7 +61,36 @@ int init(){
         printf("error to create udp socket\n");
         return -1;
     }
-    printf("%d hahahh\n",sock_udp_fd);
+    sockaddr_in client;
+    client.sin_family = AF_INET;
+    client.sin_addr.s_addr = inet_addr(CLIENT_SUBNET_IP_ADDR);
+    client.sin_port = htons(DEFAULT_UDP_PORT);
+    if(bind(sock_udp_fd,(sockaddr*)&client,sizeof(sockaddr))<0){
+        printf("bind udp error\n");
+    }
+
+    /*初始化发送接收ipgw的ip层raw socket */
+    sock_ip_fd=socket(AF_INET,SOCK_RAW,IPPROTO_TCP);
+    if(sock_ip_fd < 0){
+        perror("ip raw socket open error");
+        return -1;
+    }
+    /*设置IP_HDRINCL字段 手动构建ip包 */
+    int  one = 1;
+	const int *val = &one;
+	if (setsockopt(sock_ip_fd, IPPROTO_IP, IP_HDRINCL, val, sizeof(int)))
+	{
+		perror("setsockopt() error");
+		_exit(-1);
+	}
+    /*设置ip包发至ipgw */
+    sockaddr_in ipgw;
+    ipgw.sin_family = AF_INET;
+    ipgw.sin_addr.s_addr = inet_addr(IPGW_IP_ADDR);
+    ipgw.sin_port = htons(IPGW_DEFAULT_PORT);
+    if(connect(sock_ip_fd,(sockaddr*)&ipgw,sizeof(ipgw))<0){
+        perror("fail to connect ipgw");
+    }
 
 }
 
@@ -73,29 +109,100 @@ int print_dgram_data(const struct dgram_data* dgram_data){
         print_data(dgram_data->data,dgram_data->data_len);
     }
 }
-/* 
-int get_content_from_dgram(u_char* content,u_int16_t* content_data_len,const u_char* dgram){
-    if(content==NULL||content_data_len==NULL){
-        printf("null pointer from get_content_from_dgram()");
-        return -1;
+
+
+/*************************************
+ * 
+ * 发送线程 发送raw packet至ipgw或打包后的udp dgram至serverA
+ * 
+ *************************************/
+
+void* send_thread(void*){
+    while(1){
+        pthread_mutex_lock(&pthread_mutex);
+        if(data_queue.size()==0){
+            pthread_mutex_unlock(&pthread_mutex);
+            usleep(1000000);
+            continue;
+        }
+        packet *data=data_queue.front();
+        data_queue.pop();
+        pthread_mutex_unlock(&pthread_mutex);
+        u_int32_t *data32 = (u_int32_t*)(data->data);
+        u_int32_t src_ip = *(data32+3);
+        if(src_ip == inet_addr(IPGW_IP_ADDR)){ /*ipgw反射来的 应打包发送给serverA */
+            int n = send(sock_udp_fd,data->data,data->data_len,0);
+            if(n<0){
+                perror("send udp error");
+            }
+            delete data->data;
+            delete data;
+        }else if(src_ip == inet_addr(CLIENT_SUBNET_IP_ADDR)){
+            int n = send(sock_ip_fd,data->data,data->data_len,0);
+            if(n<0){
+                perror("send tcp dgram error");
+            }
+            delete data->data;
+            delete data;
+        }
     }
-    memcpy(content_data_len,dgram+1,2);
-    memcpy(content,dgram+3,*content_data_len);
 }
 
-int set_dgram_from_content(u_char* dgram,u_int16_t* dgram_data_len,const u_char op_code,
-        const u_int16_t content_len,const u_char* content){
-    if(dgram==NULL||dgram_data_len==NULL||content==NULL){
-        printf("null pointer from set_dgram_from_content()");
-    }
-    dgram[0] = op_code;
-    u_int16_t c_len = content_len;
-    memcpy(dgram+1,&c_len,2);
-    memcpy(dgram+3,content,content_len);
-    *dgram_data_len = c_len+3;
-}*/
+/*************************************
+ * 
+ * 接收线程 接收ipgw的raw packet或接收serverA的udp dgram
+ * 
+ *************************************/
 
-int request_data(int sock_fd,const struct dgram_data* send_data,struct dgram_data* recv_data){
+void* recv_thread(void*){
+    fd_set read_set;
+    timeval timeout = {1,0};
+    while(1){
+        FD_ZERO(&read_set);
+        FD_SET(sock_udp_fd,&read_set);
+        FD_SET(sock_ip_fd,&read_set);
+        int max_fd = sock_udp_fd > sock_ip_fd?sock_udp_fd:sock_ip_fd;
+        int n = select(max_fd+1,&read_set,NULL,NULL,&timeout);
+        if(n == 0)
+            continue;
+        else if(n > 0){
+            if(FD_ISSET(sock_udp_fd,&read_set)){ /*udp有数据 */
+                packet *data = new packet;
+                data->data = new u_char[MAX_DATA_SIZE];
+                int n = recv(sock_udp_fd,data->data,MAX_DATA_SIZE,0);
+                if(n < 0){
+                    printf("udp recv() error");
+                    delete data->data;
+                    delete data;
+                }else{
+                    data->data_len = n;
+                    pthread_mutex_lock(&pthread_mutex);
+                    data_queue.push(data);
+                    pthread_mutex_unlock(&pthread_mutex);
+                }  
+            }
+            if(FD_ISSET(sock_ip_fd,&read_set)){ /*sock raw ip有数据 */
+                packet *data = new packet;
+                data->data = new u_char[MAX_DATA_SIZE];
+                int n = recv(sock_ip_fd,data->data,MAX_DATA_SIZE,0);
+                if(n < 0){
+                    printf("ip raw socket recv() error");
+                    delete data->data;
+                    delete data;
+                }else{
+                    data->data_len = n;
+                    pthread_mutex_lock(&pthread_mutex);
+                    data_queue.push(data);
+                    pthread_mutex_unlock(&pthread_mutex);
+                }  
+            }
+        }else if(n < 0){
+            perror("select error");
+        }
+    }
+}
+
+static int request_data(int sock_fd,const struct dgram_data* send_data,struct dgram_data* recv_data){
     if(write(sock_fd,send_data,send_data->data_len+3)==-1){
         printf("send error!\n");
         return -1;
@@ -206,6 +313,31 @@ int step_2_connect_to_ipgw(u_int32_t serverA_ip,const u_char* user_name,const u_
     return 0;
 }
 
+
+
+int step_open_dgram_recv_and_pack(u_int32_t sa_ip){
+    /*绑定udp连接serverA */
+    sockaddr_in sa;
+    sa.sin_addr.s_addr = sa_ip;
+    sa.sin_family = AF_INET;
+    sa.sin_port = htons(DEFAULT_UDP_PORT);
+    bzero(&sa.sin_zero,8);
+    if(connect(sock_udp_fd,(sockaddr*)&sa,sizeof(sockaddr))<0){
+        printf("step connect to sa error\n");
+        return -1;
+    }
+    /*发送握手包通知client已上线 */
+    send(sock_udp_fd,"hello",5,0);
+
+    pthread_t recv,send;
+    pthread_mutex_init(&pthread_mutex,NULL);
+    pthread_create(&recv,NULL,recv_thread,NULL);
+    pthread_create(&send,NULL,send_thread,NULL);
+    while(true){
+        usleep(10000000);
+    }
+}
+
 void *main_thread(void*){
     u_int32_t subnet_ip = inet_addr(SUBNET_IP);
     u_int32_t sa_ip = 0;
@@ -221,6 +353,9 @@ void *main_thread(void*){
     printf("server A ip is %s\n",inet_ntoa(sa));
      
     if(step_2_connect_to_ipgw(sa_ip,user_name,user_name_len)<0)
+        return NULL;
+
+    if(step_open_dgram_recv_and_pack(sa_ip)<0)
         return NULL;
     
 }

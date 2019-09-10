@@ -31,9 +31,9 @@ class cacheuser{
             pthread_mutex_init(&un_bind_mutex,NULL);
         }
         /*绑定client和serverB */
-        bool bind(u_int16_t c_uport,u_int32_t c_ip,u_int32_t c_subnet_ip,u_char* session_key,u_int32_t* sb_ip);
+        bool bind(u_int16_t c_uport,u_int32_t c_ip,u_int32_t c_subnet_ip,const u_char* session_key,u_int32_t* sb_ip);
         /*解绑定client和serverB */
-        bool un_bind(u_int32_t sb_ip,u_int16_t c_uport,u_int32_t c_ip,u_int32_t c_subnet_ip,u_char* session_key);
+        bool un_bind(u_int32_t sb_ip,u_int16_t c_uport,u_int32_t c_ip,u_int32_t c_subnet_ip,const u_char* session_key);
         /*根据client查找serverB */
         int find_sb_by_client(const u_int64_t client,server_b_data* sb);
         /*根据serverB查找client */
@@ -61,7 +61,7 @@ int cacheuser::init(){
     sb_stk.push(inet_addr("172.17.0.3"));
 }
 
-bool cacheuser::bind(u_int16_t c_uport,u_int32_t c_ip,u_int32_t c_subnet_ip,u_char* session_key,u_int32_t* sb_ip_t){
+bool cacheuser::bind(u_int16_t c_uport,u_int32_t c_ip,u_int32_t c_subnet_ip,const u_char* session_key,u_int32_t* sb_ip_t){
     *sb_ip_t = sb_stk.top();
     sb_stk.pop();
 
@@ -76,14 +76,15 @@ bool cacheuser::bind(u_int16_t c_uport,u_int32_t c_ip,u_int32_t c_subnet_ip,u_ch
     sb->sb_ip = *sb_ip_t;
     memcpy(sb->session_key,session_key,16);
     u_int64_t client_ip_port_subnet_ip;
-    memcpy(&client_ip_port_subnet_ip,&c_ip,4);
-    memcpy(&client_ip_port_subnet_ip+4,&c_uport,2);
-    memcpy(&client_ip_port_subnet_ip+6,&c_subnet_ip+2,2);
+    memcpy(((u_char*)&client_ip_port_subnet_ip),&c_ip,4);
+    memcpy(((u_char*)&client_ip_port_subnet_ip)+4,&c_uport,2);
+    memcpy(((u_char*)&client_ip_port_subnet_ip)+6,((u_char*)&c_subnet_ip)+2,2);
+    print_data((u_char*)&client_ip_port_subnet_ip,8);
     client_to_sb.insert(pair<u_int64_t,server_b_data*>(client_ip_port_subnet_ip,sb));
     return true;
 }
 
-bool cacheuser::un_bind(u_int32_t sb_ip,u_int16_t c_uport,u_int32_t c_ip,u_int32_t c_subnet_ip,u_char* session_key){
+bool cacheuser::un_bind(u_int32_t sb_ip,u_int16_t c_uport,u_int32_t c_ip,u_int32_t c_subnet_ip,const u_char* session_key){
     /*暂未实现 */
     return true;
 }

@@ -537,6 +537,7 @@ void* main_thread(void*){
 
 
 int main(){
+     
     pthread_t main;
     int err = pthread_create(&main,NULL,main_thread,NULL);
     if(err != 0){
@@ -547,4 +548,33 @@ int main(){
     while(1){
         sleep(1000000);
     }
+    /*
+    u_int16_t cport = htons(1029);
+    u_int32_t c_ip = inet_addr("58.154.192.112");
+    u_int32_t subnet_ip = inet_addr("192.168.1.123");
+    u_int32_t sb_ip = 0;
+    char session[16] = "123123123";
+    if(cache.bind(cport,c_ip,subnet_ip,(u_char*)session,&sb_ip)<0){
+        printf("cache bind error");
+        exit(0);
+    }
+    //client_data cli;
+    cli.src_ip = c_ip;
+    cli.src_port = cport;
+    cli.subnet_ip = subnet_ip;
+    memcpy(cli.session_key,session,16);
+    server_b_data sb;
+    u_int64_t client_ip_port_subnet_ip;
+    memcpy(((u_char*)&client_ip_port_subnet_ip),&c_ip,4);
+    memcpy(((u_char*)&client_ip_port_subnet_ip)+4,&cport,2);
+    memcpy(((u_char*)&client_ip_port_subnet_ip)+6,((u_char*)&subnet_ip)+2,2);
+    printf("start\n");
+    print_data((u_char*)&client_ip_port_subnet_ip,8);
+    if(cache.find_sb_by_client(client_ip_port_subnet_ip,&sb)<0){
+        printf("find no result\n");
+    }else{
+        in_addr in;
+        in.s_addr = sb.sb_ip;
+        printf("%s\n",inet_ntoa(in));
+    }*/
 }
