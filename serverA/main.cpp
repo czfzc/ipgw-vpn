@@ -388,7 +388,6 @@ void* recv_thread(void*){
                     delete data;
                 }else{
                     data->data_len = n;
-                    u_int32_t client_subnet = inet_addr(CLIENT_SUBNET_IP_ADDR);
                     if(cache.check_sb_using(from.sin_addr.s_addr)&&*(data->data+33)!=0x12){ 
                         /*判断是从serverB来的tcp数据包 并且过滤raw socket发送的包*/
                         printf("raw receved\n");
@@ -414,6 +413,7 @@ void* recv_thread(void*){
                             u_int32_t sb_ip = *(data32+3);
                             client_data* client = new client_data;
                             cache.find_client_by_sb(sb_ip,client);
+                            memcpy(&data->client,client,sizeof(client_data));     //为此数据包设置归属的用户
                             u_char session_key[16];
                             memcpy(session_key,client->session_key,16);
                             *(data32+3) = client->src_ip;
@@ -430,7 +430,7 @@ void* recv_thread(void*){
                             u_char session_key[16];
                             memcpy(session_key,client->session_key,16);
                             *(data32+3) = client->subnet_ip;
-                            memcpy(data->session_key,session_key,16);   //拷贝加密session到数据包结构体
+                            memcpy(&data->client,client,sizeof(client_data));   //为此数据包设置归属的用户
                             sockaddr_in target_client;
                             target_client.sin_port = client->src_port;
                             target_client.sin_addr.s_addr = client->src_ip;
@@ -482,15 +482,15 @@ void* send_thread(void*){
                 printf("send ip to serverB to serb error!\n");
             }
         }else if(dest_ip==inet_addr(IPGW_IP_ADDR)){
-            if(src_ip==inet_addr(CLIENT_SUBNET_IP_ADDR)&&
-                    inet_addr(CLIENT_SUBNET_IP_ADDR)!=inet_addr(CLIENT_NAT_IP_ADDR)){    /*源为client内网ip则打包udp发送到client */
-                u_char* session_key = data->session_key; //需要作为对称加密秘钥的session
+            if(src_ip==data->client.subnet_ip&&
+                    data->client.subnet_ip!=data->client.src_ip){    /*源为client内网ip则打包udp发送到client */
+                u_char* session_key = data->client.session_key; //需要作为对称加密秘钥的session
                 int n = sendto(sock_udp_fd,data->data,data->data_len,0,(sockaddr*)&(data->target),sizeof(sockaddr));
 		        printf("sended udp\n");
                 if(n<0){
                     perror("send udp to client error\n");
                 }
-            }else if(src_ip==inet_addr(CLIENT_NAT_IP_ADDR)){          /*否则发到网关 让网关处理 也就是伪装ip直接发送ipgw */
+            }else if(src_ip==data->client.src_ip){          /*否则发到网关 让网关处理 也就是伪装ip直接发送ipgw */
                 printf("\nsending ip to ipgw\n");
 		        /* int err = send_ip_ll(sock_raw_fd,data->data,data->data_len,addr_ll_main,SERVER_A_MAC_OUT,GATEWAY_MAC);*/
                 int n = sendto(sock_ip_fd,data->data,data->data_len,0,&data->target,sizeof(sockaddr_in));

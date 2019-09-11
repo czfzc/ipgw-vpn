@@ -8,20 +8,9 @@
 #include<iostream>
 #include<pthread.h>
 #include"nettools.h"
+#include"ipgw.h"
 #pragma pack(1)
 using namespace std;
-
-struct client_data{
-    u_int32_t src_ip = 0;
-    u_int16_t src_port = 0;
-    u_int32_t subnet_ip = 0;
-    u_char session_key[16];
-};
-
-struct server_b_data{
-    u_int32_t sb_ip;
-    u_char session_key[16];
-};
 
 class cacheuser{
     public:
