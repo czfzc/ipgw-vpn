@@ -50,7 +50,7 @@ int init(){
     */
     sockaddr_in serA;
     serA.sin_family = AF_INET;
-    serA.sin_addr.s_addr = inet_addr(INADDR_ANY);
+    serA.sin_addr.s_addr = htons(INADDR_ANY);
     serA.sin_port = htons(DEFAULT_UDP_PORT);
     int n = bind(sock_udp_fd,(sockaddr*)&serA,sizeof(sockaddr));
     if(n<0){
