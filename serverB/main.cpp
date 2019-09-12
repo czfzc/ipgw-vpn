@@ -56,7 +56,7 @@ void* main_thread(void*){
             }else{         /*发送数据包失败 */
                 char mes[] = "connect ipgw fail!";
                 u_char data[strlen(mes)+3];
-                data[0] = 14;
+                data[0] = 0;
                 u_int16_t datalen = htons(strlen(mes));
                 memcpy(data+1,&datalen,2);
                 memcpy(data+3,mes,strlen(mes));

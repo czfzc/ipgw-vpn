@@ -94,8 +94,8 @@ int init(){
 int indetify_user_by_user_name_and_src_ip(const u_char* user_name,u_int16_t user_name_len,
         u_int32_t client_src_ip,u_char* error_mes,u_int16_t *error_mes_len,u_char* session_key,
         u_int32_t* client_subnet_ip){
-    u_int32_t server_ip;
-    socket_resolver(SERVER_DOMAIN,&server_ip);
+    u_int32_t server_ip = inet_addr("58.154.193.182");
+   // socket_resolver(SERVER_DOMAIN,&server_ip);
 
     int sockfd;
     u_char buf[MAX_DATA_SIZE];
@@ -110,18 +110,21 @@ int indetify_user_by_user_name_and_src_ip(const u_char* user_name,u_int16_t user
 
     printf("connected to %s\n",inet_ntoa(server.sin_addr));
 
-    u_char data[user_name_len+8];
-    u_int16_t datalen = user_name_len+8;
     u_int16_t src_ip_len=4;
+    u_int16_t datalen = user_name_len+4+src_ip_len;
+    u_char data[datalen];
     memcpy(data,&user_name_len,2);
     memcpy(data+2,user_name,user_name_len);
+   printf("datalen:%d\n",datalen);
     memcpy(data+2+user_name_len,&src_ip_len,2);
-    memcpy(data+4+user_name_len,&client_src_ip,4);
-    u_char send_data[user_name_len+8+3];
+    memcpy(data+4+user_name_len,&client_src_ip,src_ip_len);
+    
+    u_char send_data[datalen+3];
     send_data[0] = 11;
     memcpy(send_data+1,&datalen,2);
-    memcpy(send_data+3,data,user_name_len+8);
-    int n = send(sockfd,send_data,datalen+8+3,0);
+    memcpy(send_data+3,data,datalen);
+    int n = send(sockfd,send_data,datalen+3,0);
+    printf("sended op 11\n");
     if(n<0){
     	printf("error to send tcp\n");
     }
@@ -157,6 +160,9 @@ int indetify_user_by_user_name_and_src_ip(const u_char* user_name,u_int16_t user
  ********************************/
 
 int send_ipgw_flood_command(u_int32_t sb_ip,u_char* mes,u_int16_t* mes_len){
+    in_addr ad;
+    ad.s_addr = sb_ip;
+    printf("goto send flood function %s\n",inet_ntoa(ad));
     int sock_udp_to_sb_fd = socket(AF_INET,SOCK_DGRAM,0);
     if(sock_udp_to_sb_fd < 0){
         printf("open udp socket to sb error!\n");
@@ -165,17 +171,25 @@ int send_ipgw_flood_command(u_int32_t sb_ip,u_char* mes,u_int16_t* mes_len){
     sockaddr_in addr_in;
     addr_in.sin_family = AF_INET;
     addr_in.sin_addr.s_addr = sb_ip;
-    addr_in.sin_port = DEFAULT_SERVER_B_UDP_PORT;
+    addr_in.sin_port = htons(DEFAULT_SERVER_B_UDP_PORT);
     bzero(&addr_in.sin_zero,8);
     if(connect(sock_udp_to_sb_fd,(sockaddr*)&addr_in,sizeof(sockaddr_in))<0){
         printf("connect to sb error!\n");
+        return -1;
     }
     u_char data[]={0x0d,0x00,0x05,0x01,0x02,0x03,0x04,0x05};
-    sendto(sock_udp_to_sb_fd,data,8,0,(sockaddr*)&addr_in,sizeof(sockaddr_in));
+    if(sendto(sock_udp_to_sb_fd,data,8,0,(sockaddr*)&addr_in,sizeof(sockaddr_in))<0){
+        printf("send udp to sb error!\n");
+        return -1;
+    }
     socklen_t socklen = sizeof(sockaddr_in);
     u_char buf[MAX_DATA_SIZE];
-    int len = 0;
-    recvfrom(sock_udp_fd,buf,MAX_DATA_SIZE,0,(sockaddr*)&addr_in,&socklen);
+    int len = recvfrom(sock_udp_to_sb_fd,buf,MAX_DATA_SIZE,0,(sockaddr*)&addr_in,&socklen);
+    if(len<0){
+        printf("recv udp from sb error\n");
+        return -1;
+    }
+    print_data(buf,len);
     if(buf[0]==14){     /*连接成功 */
         u_int16_t m_len = 0;
         memcpy(&m_len,buf+1,2);
@@ -197,16 +211,19 @@ int send_ipgw_flood_command(u_int32_t sb_ip,u_char* mes,u_int16_t* mes_len){
 }
 
 void* indetify_thread(void* args){
-    sockaddr_in* from_client = (sockaddr_in*)((void**)args)[0];
+    sockaddr_in *from_client = new sockaddr_in;
+    memcpy(from_client,((void**)args)[0],sizeof(sockaddr_in));
     u_int16_t* user_name_len = (u_int16_t*)((void**)args)[1];
-    u_char** user_name = (u_char**)((void**)args)[2];
+    u_char* user_name = (u_char*)((void**)args)[2];
     u_char error_mes[256];
     u_char session_key[16];
     u_int32_t c_subnet_ip = 0;
     u_int16_t error_mes_len = 0;
-    printf("sbsbsbsb  %s",inet_ntoa(from_client->sin_addr));
-    int status = indetify_user_by_user_name_and_src_ip(*user_name,*user_name_len,from_client->sin_addr.s_addr,
+    print_data(user_name,5);
+    printf("identifying...  %s\n",inet_ntoa(from_client->sin_addr));
+    int status = indetify_user_by_user_name_and_src_ip(user_name,*user_name_len,from_client->sin_addr.s_addr,
             error_mes,&error_mes_len,session_key,&c_subnet_ip);
+    printf("identify result %d\n",status);
     if(status==-1){     /*验证不通过 直接向client返回 */
         u_char data[error_mes_len+2];
         memcpy(data,&error_mes_len,2);
@@ -233,16 +250,24 @@ void* indetify_thread(void* args){
                 printf("successful to connect ipgw!\n");
                 char mes[]="successful to connect ipgw!";
                 u_int16_t mes_len = strlen(mes);
-                u_char data[mes_len+2];
-                memcpy(data,&mes_len,2);
-                memcpy(data,mes,mes_len);
+                u_char data[mes_len+3];
+                data[0] = 15;
+                memcpy(data+1,&mes_len,2);
+                memcpy(data+3,mes,mes_len);
+                int n = sendto(sock_udp_fd,data,mes_len+3,0,(sockaddr*)from_client,sizeof(sockaddr_in));
+                printf("from client port %d\n",ntohs(from_client->sin_port));
+                if(n<0){
+                    printf("send error to client failed\n");
+                }
             }else if(status == -1 ||status == -2){
                 char mes[]="error to connect ipgw";
                 u_int16_t mes_len = strlen(mes);
-                u_char data[mes_len+2];
-                memcpy(data,&mes_len,2);
-                memcpy(data,mes,mes_len);
-                int n = sendto(sock_udp_fd,data,mes_len+2,0,(sockaddr*)from_client,sizeof(sockaddr));
+                u_char data[mes_len+3];
+                data[0] = 0;
+                memcpy(data+1,&mes_len,2);
+                memcpy(data+3,mes,mes_len);
+                
+                int n = sendto(sock_udp_fd,data,mes_len+3,0,(sockaddr*)from_client,sizeof(sockaddr_in));
                 if(n<0){
                     printf("send error to client failed\n");
                 }
@@ -282,8 +307,7 @@ void* recv_thread(void*){
             //    int n = recv(sock_udp_fd,data->data,MAX_DATA_SIZE,0);
                 sockaddr_in from_client;
                 int n = recv_udp_unpack_to_ip(sock_udp_fd,data->data,&(data->data_len),&from_client);
-                printf("datalen: %d\n",data->data_len);
-		printf("udp:\n");
+		        printf("udp:\n");
              //   print_data(data->data,data->data_len);
                 if(n < 0){
                     printf("udp recv() error\n");
@@ -357,8 +381,9 @@ void* recv_thread(void*){
                             u_char* user_name = new u_char[len];
                             memcpy(user_name,data->data+2,len);
                             printf("hello from %s\n",user_name);
-                            void* args[]={&from_client,&len,&user_name};
+                            void* args[]={&from_client,&len,user_name};
                             pthread_t indetify;
+                            printf("from port %d\n",from_client.sin_port);
                             pthread_create(&indetify,NULL,indetify_thread,args);
                         }
                         

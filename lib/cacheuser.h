@@ -47,7 +47,7 @@ class cacheuser{
 };
 
 int cacheuser::init(){
-    sb_stk.push(inet_addr("172.17.0.3"));
+    sb_stk.push(inet_addr("172.17.0.2"));
     return 0;
 }
 
