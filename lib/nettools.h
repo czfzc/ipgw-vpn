@@ -184,7 +184,7 @@ int get_local_ip_using_create_socket(u_int32_t *subnet_ip)
     len =  sizeof(struct sockaddr_in);
     getsockname(sock_fd, (struct sockaddr*)&local_addr, &len);
 
-    if(local_addr.sin_addr)
+    if(local_addr.sin_addr!=0)
     {
         *subnet_ip = local_addr.sin_addr.s_addr;
         status = 0;
