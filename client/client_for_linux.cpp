@@ -287,6 +287,7 @@ int step_2_connect_to_ipgw(u_int32_t serverA_ip,const u_char* user_name,const u_
     sa.sin_family = AF_INET;
     sa.sin_addr.s_addr = serverA_ip;
     sa.sin_port = htons(1026);
+    
     bzero(&sa.sin_zero,8);
 
     u_char data[user_name_len+2];
@@ -303,7 +304,7 @@ int step_2_connect_to_ipgw(u_int32_t serverA_ip,const u_char* user_name,const u_
     u_char buf[MAX_DATA_SIZE];
     sockaddr_in from;
     socklen_t from_len = sizeof(sockaddr_in);
-    n = recvfrom(sock_udp_fd,buf,MAX_DATA_SIZE,0,(sockaddr*)&from,&from_len);
+    n = recv(sock_udp_fd,buf,MAX_DATA_SIZE,0);
     if(n<0){
         printf("error to recv udp %d\n",errno);
         return -1;
@@ -312,18 +313,16 @@ int step_2_connect_to_ipgw(u_int32_t serverA_ip,const u_char* user_name,const u_
     print_data(buf,n);
     u_char mes[MAX_DATA_SIZE];
     u_int16_t mes_len = 0;
-    memcpy(&mes_len,buf,2);
-    memcpy(mes,buf+2,mes_len);
+    memcpy(&mes_len,buf+1,2);
+    memcpy(mes,buf+3,mes_len);
     mes[mes_len] = '\0';
-    printf("mes_len: %d",mes_len);
     printf("result from serverA: %s\n",mes);
- /*    if(buf[0]==14){
+     if(buf[0]==15){
         printf("success!\n");
     }else if(buf[0]==0){
-        buf[n]='\0';
-        printf("err: %s\n",buf);
+        printf("error!\n");
         return -1;
-    }*/
+    }
     return 0;
 }
 
