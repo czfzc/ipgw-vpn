@@ -101,7 +101,7 @@ int init(){
     if(connect(sock_ip_fd,(sockaddr*)&ipgw,sizeof(ipgw))<0){
         perror("fail to connect ipgw");
     }
-
+    return 0;
 }
 
 int print_dgram_data(const struct dgram_data* dgram_data){
@@ -118,6 +118,7 @@ int print_dgram_data(const struct dgram_data* dgram_data){
         printf("recv data:");
         print_data(dgram_data->data,dgram_data->data_len);
     }
+    return 0;
 }
 
 
@@ -156,6 +157,7 @@ void* send_thread(void*){
             delete data;
         }
     }
+    return NULL;
 }
 
 /*************************************
@@ -210,6 +212,7 @@ void* recv_thread(void*){
             perror("select error");
         }
     }
+    return NULL;
 }
 
 static int request_data(int sock_fd,const struct dgram_data* send_data,struct dgram_data* recv_data){
@@ -225,6 +228,7 @@ static int request_data(int sock_fd,const struct dgram_data* send_data,struct dg
     }
     printf("received:\n");
     print_dgram_data(recv_data);
+    return 0;
 }
 
 /*登录步骤 */

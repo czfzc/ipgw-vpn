@@ -159,6 +159,7 @@ int md5_16(u_char* result,const u_char* content,int content_len){
 	md5_append(&state, (const md5_byte_t *)content, content_len);
 	md5_finish(&state, digest);
     memcpy(result,&digest,16);
+    return 0;
 }
 
 int get_local_ip_using_create_socket(u_int32_t *subnet_ip) 

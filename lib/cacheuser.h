@@ -48,6 +48,7 @@ class cacheuser{
 
 int cacheuser::init(){
     sb_stk.push(inet_addr("172.17.0.3"));
+    return 0;
 }
 
 bool cacheuser::bind(u_int16_t c_uport,u_int32_t c_ip,u_int32_t c_subnet_ip,const u_char* session_key,u_int32_t* sb_ip_t){

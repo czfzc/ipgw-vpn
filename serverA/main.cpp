@@ -63,8 +63,8 @@ int init(){
         perror("sock raw open error");
         return -1;
     }
-    get_default_sockaddr_ll_send(sock_raw_fd,&addr_ll,DEFAULT_DEVICE_NAME);
-    get_default_sockaddr_ll_send(sock_raw_fd,&addr_ll_main,DEFAULT_DEVICE_NAME_MAIN);
+    get_default_sockaddr_ll_send(sock_raw_fd,&addr_ll,(char*)DEFAULT_DEVICE_NAME);
+    get_default_sockaddr_ll_send(sock_raw_fd,&addr_ll_main,(char*)DEFAULT_DEVICE_NAME_MAIN);
     
     /*初始化发送ip层raw socket */
     sock_ip_fd=socket(AF_INET,SOCK_RAW,IPPROTO_TCP);
@@ -260,6 +260,7 @@ void* indetify_thread(void* args){
             }
         }
     }
+    return NULL;
 }
 
 void* recv_thread(void*){
@@ -457,6 +458,7 @@ void* recv_thread(void*){
             perror("select error\n");
         }
     }
+    return NULL;
 }
 
 
@@ -502,6 +504,7 @@ void* send_thread(void*){
         delete data->data;
         delete data;
     }
+    return NULL;
 }
 
 void* print_thread(void*){
@@ -511,6 +514,7 @@ void* print_thread(void*){
 //        printf("queue size: %d\n",data_queue.size());
         pthread_mutex_unlock(&pthread_mutex);
     }
+    return NULL;
 }
 
 void* main_thread(void*){
@@ -524,6 +528,7 @@ void* main_thread(void*){
     pthread_create(&recv,NULL,recv_thread,NULL);
     pthread_create(&send,NULL,send_thread,NULL);
     pthread_create(&print,NULL,print_thread,NULL);
+    return NULL;
 }
 
 
