@@ -349,7 +349,13 @@ void* recv_thread(void*){
                             target_sb_in.sin_family = AF_INET;
                             target_sb_in.sin_addr.s_addr = sb_ip;
                             bzero(&target_sb_in.sin_zero,8);
-                            memcpy(&(data->target),&target_sb_in,sizeof(struct sockaddr)); /*将数据包结构体的目的地设置为对应的serverB */
+                            memcpy(&(data->target),&target_sb_in,sizeof(struct sockaddr)); 
+                            /*将数据包结构体的目的地设置为对应的serverB */
+
+                            memcpy(data->client.session_key,sb->session_key,16); /*将客户端信息拷贝进去 */
+                            data->client.src_ip = c_ip;
+                            data->client.subnet_ip = c_subnet_ip;
+                            data->client.src_port = c_udp_port;
                         }
                         
                         
@@ -416,7 +422,7 @@ void* recv_thread(void*){
                     data->data_len = n;
                     if(cache.check_sb_using(from.sin_addr.s_addr)&&*(data->data+33)!=0x12){ 
                         /*判断是从serverB来的tcp数据包 并且过滤raw socket发送的包*/
-                        printf("raw receved\n");
+                        printf("sb raw receved\n");
                         u_char temp[MAX_DATA_SIZE];
                         memcpy(temp,data->data+14,data->data_len-14);
                         memcpy(data->data,temp,data->data_len-14);
@@ -424,7 +430,6 @@ void* recv_thread(void*){
                         u_char bt = *(data->data);
                         bt = bt<<4;
                         u_int16_t ip_hdr_len = bt/4;
-                     //   printf("ip_hdr_len:%d\n",ip_hdr_len);
                         u_int32_t *data32 = (u_int32_t*)data->data; 
 
                         /*
@@ -473,7 +478,7 @@ void* recv_thread(void*){
                         data_queue.push(data);
                         pthread_mutex_unlock(&pthread_mutex);
                     }else{
-              //          printf("raw unreceved\n");
+                        printf("sb raw unreceved\n");
                         delete data->data;
                         delete data; 
                     }

@@ -363,13 +363,13 @@ void *main_thread(void*){
     in_addr sa;
     sa.s_addr = sa_ip;
     printf("server A ip is %s\n",inet_ntoa(sa));
+
+    if(step_open_dgram_recv_and_pack(sa_ip)<0)
+        return NULL;
      
     if(step_2_connect_to_ipgw(sa_ip,user_name,user_name_len)<0)
         return NULL;
 
-    if(step_open_dgram_recv_and_pack(sa_ip)<0)
-        return NULL;
-    
 }
 
 int main(){
